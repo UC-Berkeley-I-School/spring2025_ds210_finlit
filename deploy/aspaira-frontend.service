@@ -1,0 +1,15 @@
+[Unit]
+Description=AspAIra Frontend Service
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/AspAIra/frontend
+Environment="PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/ubuntu/AspAIra/.env
+ExecStart=/home/ubuntu/.local/bin/streamlit run Home.py --server.port 8501 --server.address 0.0.0.0
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target 
