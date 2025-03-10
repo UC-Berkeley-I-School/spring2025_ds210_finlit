@@ -1,13 +1,17 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-import models, database
+from . import models, database
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from typing import Optional, List, Literal
 import uvicorn
+from .services.dify_service import DifyService
+from .config import API_CONFIG
 
-app = FastAPI()
+app = FastAPI(**API_CONFIG)
+
+# Initialize services
+dify_service = DifyService()
 
 # CORS configuration
 app.add_middleware(
@@ -39,7 +43,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = database.create_access_token(data={"sub": user["username"]})
+    access_token = database.create_access_token({"sub": user["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/signup")
@@ -58,16 +62,9 @@ async def create_user(user: models.UserCreate):
                 content={"message": "Password must be at least 6 characters long"}
             )
             
-        result = database.create_user(user.username, user.password)
-        if result:
-            print(f"User created successfully: {user.username}")  # Debug log
-            return {"message": "User created successfully"}
-        else:
-            print(f"Username already exists: {user.username}")  # Debug log
-            return JSONResponse(
-                status_code=400,
-                content={"message": "Username already exists"}
-            )
+        database.create_user(user.username, user.password)
+        print(f"User created successfully: {user.username}")  # Debug log
+        return {"message": "User created successfully"}
     except Exception as e:
         print(f"Error in create_user: {str(e)}")  # Debug log
         return JSONResponse(
@@ -119,6 +116,69 @@ async def get_all_users():
     users = database.scan_all_users()
     return {"users": users}
 
-# Add this at the end of the file
+@app.post("/api/chat")
+async def chat(
+    request: models.ChatRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Process chat message and return response"""
+    try:
+        # Get user profile
+        user = database.get_user(current_user["username"])
+        profile_data = {
+            "dependents_count": user.get("profile1", {}).get("number_of_dependents", ""),
+            "bank_account": user.get("profile2", {}).get("bank_account", ""),
+            "debt_status": user.get("profile2", {}).get("debt_information", ""),
+            "remittance_status": user.get("profile2", {}).get("remittance_information", ""),
+            "remittance_amount": user.get("profile2", {}).get("remittance_amount", "")
+        }
+
+        # Process message
+        response = await dify_service.process_message(
+            username=current_user["username"],
+            message=request.message,
+            profile_data=profile_data
+        )
+
+        return response
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing chat request: {str(e)}"
+        )
+
+@app.get("/api/chat/history")
+async def get_chat_history(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get user's chat history"""
+    try:
+        history = database.get_chat_history(current_user["username"])
+        return {"history": history}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving chat history: {str(e)}"
+        )
+
+@app.get("/user/profile")
+async def get_user_profile(current_user: dict = Depends(get_current_user)):
+    """Get complete user profile data"""
+    try:
+        user = database.get_user(current_user["username"])
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        # Return only the necessary profile data
+        return {
+            "profile1": user.get("profile1", {}),
+            "profile2": user.get("profile2", {})
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving profile: {str(e)}"
+        )
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

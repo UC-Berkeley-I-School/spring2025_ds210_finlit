@@ -166,32 +166,45 @@ st.markdown("""
 
 def login(username: str, password: str):
     try:
+        print(f"Attempting login for username: {username}")  # Debug log
         response = requests.post(
-            "http://localhost:8000/token",
+            "http://localhost:8001/token",
             data={"username": username, "password": password}
         )
+        print(f"Login response status: {response.status_code}")  # Debug log
+        print(f"Login response body: {response.text}")  # Debug log
         if response.status_code == 200:
             return response.json()
-        return None
-    except requests.RequestException:
+        else:
+            print(f"Login failed with status {response.status_code}: {response.text}")  # Debug log
+            return None
+    except requests.RequestException as e:
+        print(f"Login request error: {str(e)}")  # Debug log
         return None
 
 def create_account(username: str, password: str):
     try:
+        print(f"Attempting to create account for username: {username}")  # Debug log
         response = requests.post(
-            "http://localhost:8000/signup",
+            "http://localhost:8001/signup",
             json={"username": username, "password": password}
         )
+        print(f"Create account response status: {response.status_code}")  # Debug log
+        print(f"Create account response body: {response.text}")  # Debug log
         if response.status_code == 200:
             return True
-        return False
-    except requests.RequestException:
+        else:
+            error_message = response.json().get("message", "Unknown error")
+            print(f"Account creation failed: {error_message}")  # Debug log
+            return False
+    except requests.RequestException as e:
+        print(f"Create account request error: {str(e)}")  # Debug log
         return False
 
 def check_profile_status(token: str):
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get("http://localhost:8000/user/profile-status", headers=headers)
+        response = requests.get("http://localhost:8001/user/profile-status", headers=headers)
         if response.status_code == 200:
             return response.json()
         return {"profile1_complete": False, "profile2_complete": False}
@@ -223,12 +236,15 @@ with col1:
                 st.session_state.access_token = success["access_token"]
                 # Check profile status after successful login
                 profile_status = check_profile_status(success["access_token"])
+                print(f"Profile status: {profile_status}")  # Debug log
                 if profile_status["profile1_complete"] and profile_status["profile2_complete"]:
                     st.success("Login successful!")
                     st.switch_page("pages/3_Coach_Landing.py")
                 else:
                     st.success("Login successful! Please complete your profile.")
                     st.switch_page("pages/2_Profile1.py")
+            else:
+                st.error("Login failed. Please check your credentials and try again.")
 
 with col2:
     if st.button("Create Account"):
@@ -242,8 +258,15 @@ with col2:
                 if success:
                     st.session_state.access_token = success["access_token"]
                     st.switch_page("pages/2_Profile1.py")
+                else:
+                    st.error("Account created but login failed. Please try logging in manually.")
             else:
-                st.error("Failed to create account. Username may already exist.")
+                response = requests.post(
+                    "http://localhost:8001/signup",
+                    json={"username": username, "password": password}
+                )
+                error_message = response.json().get("message", "Unknown error")
+                st.error(f"Failed to create account: {error_message}")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True) 

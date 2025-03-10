@@ -1,3 +1,6 @@
+"""
+Database operations for AspAIra application.
+"""
 import boto3
 import os
 from botocore.exceptions import ClientError
@@ -5,6 +8,8 @@ from botocore.config import Config
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+from typing import Optional, Dict, List
+from .config import DATABASE_CONFIG
 
 # JWT Configuration
 SECRET_KEY = "development_secret_key"  # Change in production
@@ -15,61 +20,155 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # DynamoDB configuration
-dynamodb = boto3.resource(
-    'dynamodb',
-    endpoint_url='http://localhost:8001',
-    region_name='local',
-    aws_access_key_id='dummy',
-    aws_secret_access_key='dummy',
-    config=Config(
-        connect_timeout=5,
-        retries={'max_attempts': 1}
-    )
-)
-
-TABLE_NAME = 'AspAIra_Users'
-
-def _create_table_if_not_exists():
-    try:
-        # Check if table exists
-        dynamodb.Table(TABLE_NAME).table_status
-        print(f"Table {TABLE_NAME} exists")
-    except:
-        print(f"Creating table {TABLE_NAME}")
-        table = dynamodb.create_table(
-            TableName=TABLE_NAME,
-            KeySchema=[
-                {
-                    'AttributeName': 'username',
-                    'KeyType': 'HASH'
-                }
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': 'username',
-                    'AttributeType': 'S'
-                }
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+try:
+    dynamodb = boto3.resource(
+        'dynamodb',
+        endpoint_url='http://localhost:8000',
+        region_name='local',
+        aws_access_key_id='dummy',
+        aws_secret_access_key='dummy',
+        config=Config(
+            connect_timeout=5,
+            retries={'max_attempts': 1}
         )
-        table.wait_until_exists()
-        print(f"Table {TABLE_NAME} created successfully")
+    )
+    # Test the connection
+    dynamodb.meta.client.list_tables()
+    print("Successfully connected to DynamoDB local")
+except Exception as e:
+    print(f"Warning: Could not connect to DynamoDB local: {str(e)}")
+    print("Using in-memory storage for development")
+    # Create a simple in-memory storage for development
+    class InMemoryDB:
+        def __init__(self):
+            self.tables = {}
+            self._create_tables()
+        
+        def _create_tables(self):
+            self.tables['AspAIra_Users'] = {}
+            self.tables['AspAIra_Chat'] = {}
+        
+        def Table(self, name):
+            return InMemoryTable(self.tables[name])
+    
+    class InMemoryTable:
+        def __init__(self, data):
+            self.data = data
+        
+        def put_item(self, Item):
+            if 'username' in Item:
+                self.data[Item['username']] = Item
+        
+        def get_item(self, Key):
+            return {'Item': self.data.get(Key.get('username'))}
+        
+        def query(self, **kwargs):
+            return {'Items': list(self.data.values())}
+        
+        def scan(self):
+            return {'Items': list(self.data.values())}
+        
+        def update_item(self, **kwargs):
+            return {'Attributes': kwargs.get('ExpressionAttributeValues', {})}
+    
+    dynamodb = InMemoryDB()
+
+USERS_TABLE = 'AspAIra_Users'
+CHAT_TABLE = 'AspAIra_Chat'
+
+def _create_tables_if_not_exists():
+    try:
+        # Check if users table exists
+        try:
+            dynamodb.Table(USERS_TABLE).table_status
+            print(f"Table {USERS_TABLE} exists")
+        except (ClientError, AttributeError):
+            print(f"Creating table {USERS_TABLE}")
+            try:
+                table = dynamodb.create_table(
+                    TableName=USERS_TABLE,
+                    KeySchema=[
+                        {
+                            'AttributeName': 'username',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    AttributeDefinitions=[
+                        {
+                            'AttributeName': 'username',
+                            'AttributeType': 'S'
+                        }
+                    ],
+                    ProvisionedThroughput={
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                )
+                table.wait_until_exists()
+                print(f"Table {USERS_TABLE} created successfully")
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceInUseException':
+                    print(f"Table {USERS_TABLE} already exists")
+                else:
+                    raise
+
+        # Check if chat table exists
+        try:
+            dynamodb.Table(CHAT_TABLE).table_status
+            print(f"Table {CHAT_TABLE} exists")
+        except (ClientError, AttributeError):
+            print(f"Creating table {CHAT_TABLE}")
+            try:
+                table = dynamodb.create_table(
+                    TableName=CHAT_TABLE,
+                    KeySchema=[
+                        {
+                            'AttributeName': 'username',
+                            'KeyType': 'HASH'
+                        },
+                        {
+                            'AttributeName': 'timestamp',
+                            'KeyType': 'RANGE'
+                        }
+                    ],
+                    AttributeDefinitions=[
+                        {
+                            'AttributeName': 'username',
+                            'AttributeType': 'S'
+                        },
+                        {
+                            'AttributeName': 'timestamp',
+                            'AttributeType': 'S'
+                        }
+                    ],
+                    ProvisionedThroughput={
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                )
+                table.wait_until_exists()
+                print(f"Table {CHAT_TABLE} created successfully")
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceInUseException':
+                    print(f"Table {CHAT_TABLE} already exists")
+                else:
+                    raise
+    except Exception as e:
+        print(f"Warning: Error creating tables: {str(e)}")
+        print("Using in-memory storage for development")
+
+# Create tables on module import
+_create_tables_if_not_exists()
 
 def get_table():
-    return dynamodb.Table(TABLE_NAME)
-
-# Create table on module import
-_create_table_if_not_exists()
+    return dynamodb.Table(USERS_TABLE)
 
 def create_user(username: str, password: str):
     print(f"Attempting to create user: {username}")  # Debug log
     hashed_password = pwd_context.hash(password)
     try:
-        table = dynamodb.Table(TABLE_NAME)
-        print(f"Got table reference: {TABLE_NAME}")  # Debug log
+        table = dynamodb.Table(USERS_TABLE)
+        print(f"Got table reference: {USERS_TABLE}")  # Debug log
         
         # First check if user exists
         existing_user = table.get_item(Key={'username': username}).get('Item')
@@ -98,7 +197,7 @@ def create_user(username: str, password: str):
 
 def get_user(username: str):
     try:
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(USERS_TABLE)
         response = table.get_item(Key={'username': username})
         return response.get('Item')
     except ClientError:
@@ -133,7 +232,7 @@ def update_profile_part1(username: str, profile_data: dict):
     try:
         print(f"Attempting to update profile1 for user {username}")
         print(f"Profile data to save: {profile_data}")
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(USERS_TABLE)
         
         # First check if user exists
         existing_user = table.get_item(Key={'username': username})
@@ -161,7 +260,7 @@ def update_profile_part1(username: str, profile_data: dict):
 
 def update_profile_part2(username: str, profile_data: dict):
     try:
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(USERS_TABLE)
         response = table.update_item(
             Key={
                 'username': username
@@ -181,7 +280,7 @@ def update_profile_part2(username: str, profile_data: dict):
 
 def get_profile_status(username: str):
     try:
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(USERS_TABLE)
         response = table.get_item(
             Key={
                 'username': username
@@ -206,11 +305,74 @@ def get_profile_status(username: str):
 
 def scan_all_users():
     try:
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(USERS_TABLE)
         response = table.scan()
         return response.get('Items', [])
     except Exception as e:
         print(f"Error scanning users: {str(e)}")
+        return []
+
+def save_chat_interaction(
+    username: str,
+    message: str,
+    response: str,
+    interaction_type: str,
+    metadata: Optional[Dict] = None,
+    quiz_data: Optional[Dict] = None,
+    quiz_answers: Optional[List[str]] = None,
+    quiz_feedback: Optional[str] = None
+) -> bool:
+    """Save chat interaction to DynamoDB with enhanced metadata"""
+    try:
+        table = dynamodb.Table(CHAT_TABLE)
+        interaction = {
+            'username': username,
+            'timestamp': datetime.utcnow().isoformat(),
+            'message': message,
+            'response': response,
+            'interaction_type': interaction_type,
+            'metadata': metadata or {},
+            'quiz_data': quiz_data,
+            'quiz_answers': quiz_answers,
+            'quiz_feedback': quiz_feedback
+        }
+        
+        table.put_item(Item=interaction)
+        return True
+    except Exception as e:
+        print(f"Error saving chat interaction: {str(e)}")
+        return False
+
+def get_chat_history(username: str) -> List[Dict]:
+    """Get user's chat history with enhanced metadata"""
+    try:
+        table = dynamodb.Table(CHAT_TABLE)
+        response = table.query(
+            KeyConditionExpression='username = :username',
+            ExpressionAttributeValues={':username': username},
+            ScanIndexForward=False  # Most recent first
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error getting chat history: {str(e)}")
+        return []
+
+def get_user_quiz_history(username: str) -> List[Dict]:
+    """Get user's quiz history"""
+    try:
+        table = dynamodb.Table(CHAT_TABLE)
+        response = table.query(
+            KeyConditionExpression='username = :username',
+            FilterExpression='interaction_type = :type',
+            ExpressionAttributeValues={
+                ':username': username,
+                ':type': 'quiz'
+            },
+            ScanIndexForward=False
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error getting quiz history: {str(e)}")
         return []
 
 # End of file - removing reset_database function 

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, List, Dict
+from datetime import datetime
 
 class UserBase(BaseModel):
     username: str
@@ -34,4 +35,44 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    username: Optional[str] = None 
+    username: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    message: str
+    agent_type: str = "dify"  # Default to dify for now
+    agent_version: str = "v1"  # Default to v1 for now
+
+class ChatResponse(BaseModel):
+    message: str
+    timestamp: datetime
+    interaction_type: Literal["opening", "content", "quiz", "feedback"]
+    quiz: Optional[List[Dict]] = None
+
+class ChatInteraction(BaseModel):
+    username: str
+    timestamp: datetime
+    message: str
+    response: str
+    interaction_type: Literal["opening", "content", "quiz", "feedback"]
+    metadata: Dict = Field(default_factory=dict)
+    quiz_data: Optional[Dict] = None
+    quiz_answers: Optional[List[str]] = None
+    quiz_feedback: Optional[str] = None
+
+class UserEngagement(BaseModel):
+    user_id: str
+    session_duration: float
+    messages_sent: int
+    timestamp: datetime
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class UserProfile(BaseModel):
+    username: str
+    dependents_count: Optional[str] = None
+    bank_account: Optional[str] = None
+    debt_status: Optional[str] = None
+    remittance_status: Optional[str] = None
+    remittance_amount: Optional[str] = None 

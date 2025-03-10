@@ -1,18 +1,32 @@
 import streamlit as st
+import requests
+from datetime import datetime
+import json
 
 # Initialize session states
-if 'current_page' not in st.session_state:
-    st.session_state.current_page = 'coach_landing'
 if 'access_token' not in st.session_state:
     st.session_state.access_token = None
-if 'current_module' not in st.session_state:
-    st.session_state.current_module = None
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+if 'user_profile' not in st.session_state:
+    st.session_state.user_profile = None
+if 'current_topic' not in st.session_state:
+    st.session_state.current_topic = None
+if 'user_input' not in st.session_state:
+    st.session_state.user_input = ""
+if 'quiz_state' not in st.session_state:
+    st.session_state.quiz_state = {
+        'active': False,
+        'current_question': 0,
+        'answers': [],
+        'questions': []
+    }
 
 # Page configuration
 st.set_page_config(
     page_title="AspAIra - Financial Coach",
     page_icon="🌱",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
         'Get Help': None,
@@ -30,240 +44,283 @@ st.markdown("""
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
     
-    /* Block analytics */
-    iframe[src*="analytics"], iframe[src*="segment"],
-    script[src*="analytics"], script[src*="segment"],
-    div[data-testid="stGoogleAnalytics"] {
-        display: none !important;
-    }
-    
-    /* Main styles */
-    .stApp {
-        max-width: 100%;
+    /* Message bubbles */
+    .user-message {
+        background-color: #2E8B57;
+        color: white;
         padding: 1rem;
+        border-radius: 15px 15px 0 15px;
+        margin: 0.5rem 0;
+        max-width: 80%;
+        margin-left: auto;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    .main-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
+    .assistant-message {
+        background-color: #f0f0f0;
+        color: #333;
         padding: 1rem;
-        max-width: 800px;
-        margin: 0 auto;
+        border-radius: 15px 15px 15px 0;
+        margin: 0.5rem 0;
+        max-width: 80%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .message-content {
+        margin-bottom: 0.5rem;
     }
     
-    .logo {
-        font-size: 2rem;
-        margin-bottom: 2rem;
-        color: #000000;
+    .message-timestamp {
+        font-size: 0.8rem;
+        color: #666;
+        text-align: right;
     }
-    
-    /* Button styles */
-    .stButton > button {
-        width: 100% !important;
-        padding: 0.75rem 1.5rem !important;
-        font-size: 1.1rem !important;
-        font-weight: 500 !important;
-        border-radius: 8px !important;
-        background-color: #FF4B4B !important;
-        color: white !important;
-        border: 2px solid transparent !important;
-        cursor: pointer !important;
-        transition: background-color 0.2s ease !important;
-    }
-    
-    .stButton > button:hover {
-        background-color: #E63E3E !important;
-    }
-    
-    .stButton > button:focus {
-        outline: 2px solid #000000 !important;
-        outline-offset: 2px !important;
-    }
-    
-    /* Module styles */
-    .module-container {
+
+    /* Option buttons */
+    .option-button {
+        background-color: #2E8B57;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        margin: 0.25rem 0;
         width: 100%;
-        max-width: 600px;
-        margin: 2rem auto;
-        padding: 2rem;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .option-button:hover {
+        background-color: #236B47;
+    }
+
+    /* Quiz interface */
+    .quiz-container {
         background-color: #f8f9fa;
+        padding: 1rem;
         border-radius: 8px;
+        margin: 1rem 0;
+    }
+
+    .quiz-question {
+        font-weight: bold;
+        margin-bottom: 1rem;
+    }
+
+    .quiz-option {
+        margin: 0.5rem 0;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .quiz-option:hover {
+        background-color: #f0f0f0;
+    }
+
+    /* Clear chat button */
+    .clear-chat-button {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        margin: 1rem 0;
+        cursor: pointer;
+        transition: background-color 0.3s;
     }
     
-    .module-row {
-        margin-bottom: 1.5rem;
-    }
-    
-    /* Navigation styles */
-    .nav-container {
-        width: 100%;
-        max-width: 600px;
-        margin: 2rem auto;
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-    }
-    
-    .nav-item {
-        flex: 1;
-    }
-    
-    /* Chat container */
-    .chat-container {
-        width: 100%;
-        max-width: 600px;
-        margin: 2rem auto;
-        padding: 2rem;
-        background-color: #f8f9fa;
-        border-radius: 8px;
-    }
-    
-    /* Hide problematic elements */
-    [data-baseweb="select"] > div[aria-hidden="true"] {
-        display: none !important;
-    }
-    
-    @media (forced-colors: active) {
-        .stButton > button {
-            border: 2px solid ButtonText !important;
-            background-color: ButtonFace !important;
-            color: ButtonText !important;
-        }
-        
-        .stButton > button:hover,
-        .stButton > button:focus {
-            border-color: Highlight !important;
-            background-color: ButtonFace !important;
-            color: Highlight !important;
-        }
-        
-        .module-container,
-        .chat-container {
-            border: 1px solid ButtonText !important;
-            background-color: Canvas !important;
-            color: CanvasText !important;
-        }
-        
-        .logo,
-        h2, h3, p {
-            color: CanvasText !important;
-        }
+    .clear-chat-button:hover {
+        background-color: #c82333;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Main container with semantic HTML
-st.markdown('<main class="main-container">', unsafe_allow_html=True)
+def get_user_profile():
+    """Fetch user profile data from backend"""
+    try:
+        headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
+        # First get profile status
+        status_response = requests.get("http://localhost:8001/user/profile-status", headers=headers)
+        if status_response.status_code != 200:
+            st.error("Failed to get profile status")
+            return None
+            
+        # Then get the full user data
+        user_response = requests.get("http://localhost:8001/user/profile", headers=headers)
+        if user_response.status_code == 200:
+            user_data = user_response.json()
+            # Extract and validate required profile data
+            profile_data = {
+                "dependents_count": user_data.get("profile1", {}).get("number_of_dependents", ""),
+                "bank_account": user_data.get("profile2", {}).get("bank_account", ""),
+                "debt_status": user_data.get("profile2", {}).get("debt_information", ""),
+                "remittance_status": user_data.get("profile2", {}).get("remittance_information", ""),
+                "remittance_amount": user_data.get("profile2", {}).get("remittance_amount", ""),
+                "country_of_origin": user_data.get("profile1", {}).get("country_of_origin", ""),
+                "time_in_uae": user_data.get("profile1", {}).get("time_in_uae", ""),
+                "job_title": user_data.get("profile1", {}).get("job_title", ""),
+                "housing": user_data.get("profile1", {}).get("housing", ""),
+                "education_level": user_data.get("profile1", {}).get("education_level", "")
+            }
+            
+            # Check if any required fields are missing
+            missing_fields = [k for k, v in profile_data.items() if not v]
+            if missing_fields:
+                st.warning("Some profile information is missing. The AI coach may not be able to provide fully personalized responses.")
+                st.warning(f"Missing fields: {', '.join(missing_fields)}")
+            
+            return profile_data
+        else:
+            st.error(f"Failed to get user profile. Status code: {user_response.status_code}")
+            return None
+    except Exception as e:
+        st.error(f"Error fetching profile: {str(e)}")
+        return None
 
-# Back button with proper labeling
-st.markdown('<div class="button-container">', unsafe_allow_html=True)
-if st.button("← Back", key="back_button", help="Return to the previous page"):
-    st.session_state.current_page = 'profile2'
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Logo and Title
-st.markdown('<h1 class="logo">🌱 AspAIra</h1>', unsafe_allow_html=True)
-
-# Welcome message
-st.markdown("""
-<div class="module-container">
-    <h2>Welcome to Your Financial Journey!</h2>
-    <p>Let's work together to achieve your financial goals.</p>
-</div>
-""", unsafe_allow_html=True)
-
-# Learning modules section
-st.markdown('<div class="module-container">', unsafe_allow_html=True)
-
-st.markdown('<h3>Learning Modules</h3>', unsafe_allow_html=True)
-
-st.markdown('<div class="module-row">', unsafe_allow_html=True)
-if st.button(
-    "📊 Budgeting Basics",
-    key="budgeting_module",
-    help="Learn the fundamentals of creating and managing a budget",
-    use_container_width=True
-):
-    st.session_state.current_module = 'budgeting'
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('<div class="module-row">', unsafe_allow_html=True)
-if st.button(
-    "💰 Smart Saving",
-    key="saving_module",
-    help="Discover effective strategies for saving money",
-    use_container_width=True
-):
-    st.session_state.current_module = 'saving'
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('<div class="module-row">', unsafe_allow_html=True)
-if st.button(
-    "🏦 Banking & Remittance",
-    key="banking_module",
-    help="Learn about banking services and sending money home safely",
-    use_container_width=True
-):
-    st.session_state.current_module = 'banking'
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# AI Assistant chat section
-st.markdown("""
-<div class="chat-container">
-    <h3>Your AI Financial Assistant</h3>
-    <p>Have questions? I'm here to help! Ask me anything about personal finance.</p>
-</div>
-""", unsafe_allow_html=True)
-
-# Bottom navigation
-st.markdown('<div class="nav-container">', unsafe_allow_html=True)
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown('<div class="nav-item">', unsafe_allow_html=True)
-    if st.button(
-        "👩‍🏫 Coach",
-        key="nav_coach",
-        help="Return to the coach dashboard",
-        use_container_width=True
-    ):
-        st.session_state.current_page = 'coach_landing'
+def send_message():
+    """Send message to backend and update chat history"""
+    if not st.session_state.user_input:
+        return
+        
+    # Get user input and clear the input field
+    message = st.session_state.user_input
+    st.session_state.user_input = ""
+    
+    # Get user profile data
+    profile_data = get_user_profile()
+    
+    # Send message to backend
+    try:
+        print(f"Sending message to backend: {message}")
+        response = requests.post(
+            "http://localhost:8001/api/chat",
+            headers={"Authorization": f"Bearer {st.session_state.access_token}"},
+            json={"message": message, "profile_data": profile_data},
+            timeout=60  # Add explicit timeout
+        )
+        
+        print(f"Received response status: {response.status_code}")
+        
+        # Enhanced error handling
+        if response.status_code == 401:
+            st.error("Your session has expired. Please log in again.")
+            st.switch_page("pages/1_Login.py")
+            return
+        elif response.status_code == 404:
+            st.error("The chat service is currently unavailable. Please try again later.")
+            return
+        elif response.status_code == 500:
+            st.error("An internal server error occurred. Please try again later.")
+            return
+        elif response.status_code != 200:
+            error_message = response.json().get("message", "Unknown error occurred")
+            st.error(f"Failed to get response from AI coach: {error_message}")
+            return
+        
+        data = response.json()
+        print(f"Received response data: {data}")
+        
+        if not data.get("message"):
+            st.error("Received empty response from AI coach")
+            return
+            
+        # Clear previous chat history
+        st.session_state.chat_history = []
+        
+        # Add the full response to chat history
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": data["message"],
+            "timestamp": data.get("timestamp"),
+            "message_id": data.get("message_id"),
+            "conversation_id": data.get("conversation_id")
+        })
+        
+        print(f"Updated chat history: {st.session_state.chat_history}")
+        
+        # Handle quiz if present
+        if data.get("quiz"):
+            st.session_state.current_quiz = data["quiz"]
+            st.session_state.quiz_answers = []
+            st.session_state.showing_quiz = True
+            
+        # Rerun the app to refresh the page with new chat history
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+            
+    except requests.Timeout:
+        st.error("The request is taking longer than expected. Please try again.")
+        return
+    except requests.exceptions.ConnectionError:
+        st.error("Could not connect to the server. Please check your internet connection and try again.")
+    except Exception as e:
+        print(f"Error in send_message: {str(e)}")
+        st.error(f"An unexpected error occurred: {str(e)}")
+        st.error("Please try again or contact support if the problem persists.")
 
-with col2:
-    st.markdown('<div class="nav-item">', unsafe_allow_html=True)
-    if st.button(
-        "👤 Profile",
-        key="nav_profile",
-        help="View and edit your profile",
-        use_container_width=True
-    ):
-        st.session_state.current_page = 'profile1'
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+def render_quiz_interface(quiz_data: dict):
+    """Render the quiz interface"""
+    st.markdown("### Quiz Time! 📝")
+    
+    for i, question in enumerate(quiz_data['questions']):
+        st.markdown(f"**Question {i+1}:** {question['question']}")
+        
+        # Show options as buttons
+        for j, option in enumerate(question['options']):
+            if st.button(f"{j+1}. {option}", key=f"quiz_q{i}_opt{j}"):
+                # Handle answer submission
+                response = send_message()
+                if response and response.get('interaction_type') == 'feedback':
+                    st.markdown(f"**Feedback:** {response['message']}")
+                    st.rerun()
 
-with col3:
-    st.markdown('<div class="nav-item">', unsafe_allow_html=True)
-    if st.button(
-        "💬 Chat",
-        key="nav_chat",
-        help="Chat with your AI financial assistant",
-        use_container_width=True
-    ):
-        st.session_state.current_page = 'chat'
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+def render_chat_interface():
+    """Render the chat interface"""
+    # Create a container for chat messages
+    chat_container = st.container()
+    
+    # Display chat history with improved formatting
+    with chat_container:
+        # If chat history is empty, show initial welcome message
+        if not st.session_state.chat_history:
+            welcome_message = {
+                "role": "assistant",
+                "content": """Hello! I am your financial education bot. Let's talk about how to create a budget and save money.
 
-st.markdown('</div>', unsafe_allow_html=True)
+Budgeting is important because it helps you manage your money better. You can see where your money goes and how much you can save. Would you like to learn about:
 
-st.markdown('</main>', unsafe_allow_html=True) 
+1. Creating a budget
+2. Saving strategies
+3. Tips for sending money home
+
+Please choose a number to continue.""",
+                "timestamp": datetime.now().strftime("%H:%M")
+            }
+            st.session_state.chat_history.append(welcome_message)
+        
+        # Display all messages including welcome message
+        for message in st.session_state.chat_history:
+            if message["role"] == "user":
+                st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
+            else:
+                # Add timestamp to assistant messages
+                timestamp = message.get("timestamp", datetime.now().strftime("%H:%M"))
+                st.markdown(f'<div class="assistant-message"><div class="message-content">{message["content"]}</div><div class="message-timestamp">{timestamp}</div></div>', unsafe_allow_html=True)
+    
+    # Chat input for free-form conversation
+    if prompt := st.chat_input("Ask your question here..."):
+        st.session_state.user_input = prompt
+        # Show loading state
+        with st.spinner("Thinking..."):
+            send_message()
+            st.rerun()
+
+# Main page content
+st.title("🌱 AspAIra Financial Coach")
+
+# Check if profile exists
+if not st.session_state.user_profile:
+    st.session_state.user_profile = get_user_profile()
+
+# Render chat interface
+render_chat_interface() 

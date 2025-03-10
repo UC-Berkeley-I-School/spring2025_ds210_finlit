@@ -139,7 +139,7 @@ def update_profile(data):
     try:
         headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
         response = requests.post(
-            "http://localhost:8000/user/profile1",
+            "http://localhost:8001/user/profile1",
             headers=headers,
             json=data
         )
