@@ -11,25 +11,25 @@ from typing import Dict
 
 # Agent configurations
 AGENT_CONFIGS = {
-    "dify": {
-        "v1": {
-            "api_key": "app-1sc0QKSxc2rXRTQNRvLM4Ktk",  # Local Dify API key
-            "base_url": "http://localhost",  # Updated to use HTTP for local development
-            "model": "gpt-4o-mini",
-            "required_inputs": [
-                "dependents_count",
-                "bank_account",
-                "debt_status",
-                "remittance_status",
-                "remittance_amount"
-            ]
-        }
+    "v1": {
+        "api_key": "app-xhtxiGphTme4kHhq1U9vXj2t",  # Local Dify API key
+        "base_url": "http://localhost",  # Updated to use HTTP for local development
+        "model": "gpt-4o",
+        "required_inputs": [
+            "number_of_dependents",
+            "bank_account",
+            "debt_information",
+            "remittance_information",
+            "remittance_amount",
+            "housing", 
+            "job_title",
+            "education_level"
+        ]
     }
 }
 
-# Default configurations
-DEFAULT_AGENT = "dify"
-DEFAULT_VERSION = "v1"
+# Active agent version
+ACTIVE_AGENT_VERSION = "v1"
 
 # Database configuration
 DATABASE_CONFIG = {

@@ -8,8 +8,11 @@ from botocore.config import Config
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from .config import DATABASE_CONFIG
+import uuid
+import json
+from decimal import Decimal
 
 # JWT Configuration
 SECRET_KEY = "development_secret_key"  # Change in production
@@ -46,7 +49,8 @@ except Exception as e:
         
         def _create_tables(self):
             self.tables['AspAIra_Users'] = {}
-            self.tables['AspAIra_Chat'] = {}
+            self.tables['AspAIra_Conversations'] = {}
+            self.tables['AspAIra_Chats'] = {}
         
         def Table(self, name):
             return InMemoryTable(self.tables[name])
@@ -73,12 +77,14 @@ except Exception as e:
     
     dynamodb = InMemoryDB()
 
+# Table names
 USERS_TABLE = 'AspAIra_Users'
-CHAT_TABLE = 'AspAIra_Chat'
+CONVERSATIONS_TABLE = 'AspAIra_Conversations'
+CHATS_TABLE = 'AspAIra_Chats'
 
 def _create_tables_if_not_exists():
     try:
-        # Check if users table exists
+        # Create Users table
         try:
             dynamodb.Table(USERS_TABLE).table_status
             print(f"Table {USERS_TABLE} exists")
@@ -112,28 +118,70 @@ def _create_tables_if_not_exists():
                 else:
                     raise
 
-        # Check if chat table exists
+        # Create Conversations table
         try:
-            dynamodb.Table(CHAT_TABLE).table_status
-            print(f"Table {CHAT_TABLE} exists")
+            dynamodb.Table(CONVERSATIONS_TABLE).table_status
+            print(f"Table {CONVERSATIONS_TABLE} exists")
         except (ClientError, AttributeError):
-            print(f"Creating table {CHAT_TABLE}")
+            print(f"Creating table {CONVERSATIONS_TABLE}")
             try:
                 table = dynamodb.create_table(
-                    TableName=CHAT_TABLE,
+                    TableName=CONVERSATIONS_TABLE,
+                    KeySchema=[
+                        {
+                            'AttributeName': 'conversation_id',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    AttributeDefinitions=[
+                        {
+                            'AttributeName': 'conversation_id',
+                            'AttributeType': 'S'
+                        }
+                    ],
+                    ProvisionedThroughput={
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                )
+                table.wait_until_exists()
+                print(f"Table {CONVERSATIONS_TABLE} created successfully")
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceInUseException':
+                    print(f"Table {CONVERSATIONS_TABLE} already exists")
+                else:
+                    raise
+
+        # Create Chats table
+        try:
+            dynamodb.Table(CHATS_TABLE).table_status
+            print(f"Table {CHATS_TABLE} exists")
+        except (ClientError, AttributeError):
+            print(f"Creating table {CHATS_TABLE}")
+            try:
+                table = dynamodb.create_table(
+                    TableName=CHATS_TABLE,
                     KeySchema=[
                         {
                             'AttributeName': 'username',
                             'KeyType': 'HASH'
                         },
                         {
-                            'AttributeName': 'timestamp',
+                            'AttributeName': 'message_id',
                             'KeyType': 'RANGE'
                         }
                     ],
                     AttributeDefinitions=[
                         {
                             'AttributeName': 'username',
+                            'AttributeType': 'S'
+                        },
+                        {
+                            'AttributeName': 'message_id',
+                            'AttributeType': 'S'
+                        },
+                        {
+                            'AttributeName': 'conversation_id',
                             'AttributeType': 'S'
                         },
                         {
@@ -144,13 +192,35 @@ def _create_tables_if_not_exists():
                     ProvisionedThroughput={
                         'ReadCapacityUnits': 5,
                         'WriteCapacityUnits': 5
-                    }
+                    },
+                    GlobalSecondaryIndexes=[
+                        {
+                            'IndexName': 'ConversationIndex',
+                            'KeySchema': [
+                                {
+                                    'AttributeName': 'conversation_id',
+                                    'KeyType': 'HASH'
+                                },
+                                {
+                                    'AttributeName': 'timestamp',
+                                    'KeyType': 'RANGE'
+                                }
+                            ],
+                            'Projection': {
+                                'ProjectionType': 'ALL'
+                            },
+                            'ProvisionedThroughput': {
+                                'ReadCapacityUnits': 5,
+                                'WriteCapacityUnits': 5
+                            }
+                        }
+                    ]
                 )
                 table.wait_until_exists()
-                print(f"Table {CHAT_TABLE} created successfully")
+                print(f"Table {CHATS_TABLE} created successfully")
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ResourceInUseException':
-                    print(f"Table {CHAT_TABLE} already exists")
+                    print(f"Table {CHATS_TABLE} already exists")
                 else:
                     raise
     except Exception as e:
@@ -164,35 +234,37 @@ def get_table():
     return dynamodb.Table(USERS_TABLE)
 
 def create_user(username: str, password: str):
-    print(f"Attempting to create user: {username}")  # Debug log
+    print(f"Attempting to create user: {username}")
     hashed_password = pwd_context.hash(password)
     try:
         table = dynamodb.Table(USERS_TABLE)
-        print(f"Got table reference: {USERS_TABLE}")  # Debug log
+        print(f"Got table reference: {USERS_TABLE}")
         
         # First check if user exists
         existing_user = table.get_item(Key={'username': username}).get('Item')
         if existing_user:
-            print(f"User {username} already exists")  # Debug log
+            print(f"User {username} already exists")
             return False
             
         # Create new user
         table.put_item(
             Item={
                 'username': username,
-                'hashed_password': hashed_password,
+                'password': hashed_password,
+                'profile1': {},
+                'profile2': {},
                 'is_active': True,
-                'profile_completed': False,
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.utcnow().isoformat(),
+                'last_login': datetime.utcnow().isoformat()
             }
         )
-        print(f"Successfully created user: {username}")  # Debug log
+        print(f"Successfully created user: {username}")
         return True
     except ClientError as e:
-        print(f"Error creating user: {str(e)}")  # Debug log
+        print(f"Error creating user: {str(e)}")
         raise
     except Exception as e:
-        print(f"Unexpected error creating user: {str(e)}")  # Debug log
+        print(f"Unexpected error creating user: {str(e)}")
         raise
 
 def get_user(username: str):
@@ -204,12 +276,17 @@ def get_user(username: str):
         return None
 
 def authenticate_user(username: str, password: str):
-    user = get_user(username)
-    if not user:
-        return False
-    if not pwd_context.verify(password, user['hashed_password']):
-        return False
-    return user
+    """Authenticate user with username and password"""
+    try:
+        user = get_user(username)
+        if not user:
+            return None
+        if not pwd_context.verify(password, user['password']):
+            return None
+        return user
+    except Exception as e:
+        print(f"Error authenticating user: {str(e)}")
+        return None
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -242,10 +319,9 @@ def update_profile_part1(username: str, profile_data: dict):
             Key={
                 'username': username
             },
-            UpdateExpression='SET profile1 = :profile_data, profile1_complete = :complete',
+            UpdateExpression='SET profile1 = :profile_data',
             ExpressionAttributeValues={
-                ':profile_data': profile_data,
-                ':complete': True
+                ':profile_data': profile_data
             },
             ReturnValues="UPDATED_NEW"
         )
@@ -265,10 +341,9 @@ def update_profile_part2(username: str, profile_data: dict):
             Key={
                 'username': username
             },
-            UpdateExpression='SET profile2 = :profile_data, profile2_complete = :complete',
+            UpdateExpression='SET profile2 = :profile_data',
             ExpressionAttributeValues={
-                ':profile_data': profile_data,
-                ':complete': True
+                ':profile_data': profile_data
             },
             ReturnValues="UPDATED_NEW"
         )
@@ -312,67 +387,286 @@ def scan_all_users():
         print(f"Error scanning users: {str(e)}")
         return []
 
-def save_chat_interaction(
+def create_conversation(username: str, agent_id: str) -> str:
+    """Create a new conversation"""
+    try:
+        table = dynamodb.Table(CONVERSATIONS_TABLE)
+        conversation_id = str(uuid.uuid4())  # Generate UUID for conversation_id
+        
+        conversation = {
+            "conversation_id": conversation_id,
+            "username": username,
+            "agent_id": agent_id,
+            "created_at": datetime.utcnow().isoformat(),
+            "last_activity": datetime.utcnow().isoformat(),
+            "metadata": {
+                "total_messages": 0,
+                "last_message": None,
+                "status": "active"
+            }
+        }
+        
+        table.put_item(Item=conversation)
+        return conversation_id
+    except Exception as e:
+        print(f"Error creating conversation: {str(e)}")
+        raise
+
+def get_conversation(conversation_id: str) -> Optional[Dict]:
+    """Get conversation by ID"""
+    try:
+        table = dynamodb.Table(CONVERSATIONS_TABLE)
+        response = table.get_item(
+            Key={'conversation_id': conversation_id}
+        )
+        return response.get('Item')
+    except Exception as e:
+        print(f"Error getting conversation: {str(e)}")
+        return None
+
+def get_user_conversations(username: str):
+    """Get all conversations for a user"""
+    try:
+        table = dynamodb.Table(CONVERSATIONS_TABLE)
+        response = table.scan(
+            FilterExpression='username = :username',
+            ExpressionAttributeValues={
+                ':username': username
+            }
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"Error getting user conversations: {str(e)}")
+        return []
+
+def save_chat_message(
+    message_id: str,
+    conversation_id: str,
     username: str,
+    agent_id: str,
+    timestamp: datetime,
     message: str,
     response: str,
     interaction_type: str,
-    metadata: Optional[Dict] = None,
-    quiz_data: Optional[Dict] = None,
-    quiz_answers: Optional[List[str]] = None,
-    quiz_feedback: Optional[str] = None
+    dify_metadata: dict,
+    quiz_data: Optional[dict] = None,
+    usage_metrics: Optional[dict] = None
 ) -> bool:
-    """Save chat interaction to DynamoDB with enhanced metadata"""
+    """Save a chat message to DynamoDB"""
     try:
-        table = dynamodb.Table(CHAT_TABLE)
-        interaction = {
+        print("\n=== Starting save_chat_message ===")
+        print(f"Input parameters:")
+        print(f"message_id: {message_id}")
+        print(f"conversation_id: {conversation_id}")
+        print(f"username: {username}")
+        print(f"agent_id: {agent_id}")
+        print(f"timestamp: {timestamp}")
+        print(f"message length: {len(message)}")
+        print(f"response length: {len(response)}")
+        print(f"interaction_type: {interaction_type}")
+        print(f"dify_metadata: {dify_metadata}")
+        print(f"quiz_data: {quiz_data}")
+        print(f"usage_metrics: {usage_metrics}")
+
+        # Validate required fields
+        if not message_id or not conversation_id or not username or not agent_id or not timestamp or not message or not response or not interaction_type:
+            print("Missing required fields:")
+            print(f"message_id: {bool(message_id)}")
+            print(f"conversation_id: {bool(conversation_id)}")
+            print(f"username: {bool(username)}")
+            print(f"agent_id: {bool(agent_id)}")
+            print(f"timestamp: {bool(timestamp)}")
+            print(f"message: {bool(message)}")
+            print(f"response: {bool(response)}")
+            print(f"interaction_type: {bool(interaction_type)}")
+            return False
+
+        # Validate response content
+        if not response or not response.strip():
+            print("Empty response content")
+            return False
+
+        # Convert timestamp to ISO format string
+        timestamp_str = timestamp.isoformat()
+        
+        # Convert numeric values in usage_metrics to Decimal
+        if usage_metrics:
+            converted_metrics = {}
+            for key, value in usage_metrics.items():
+                if isinstance(value, (int, float)):
+                    converted_metrics[key] = Decimal(str(value))
+                elif isinstance(value, dict):
+                    converted_metrics[key] = {
+                        k: Decimal(str(v)) if isinstance(v, (int, float)) else v
+                        for k, v in value.items()
+                    }
+                else:
+                    converted_metrics[key] = value
+            usage_metrics = converted_metrics
+        
+        # Prepare the item for DynamoDB
+        item = {
             'username': username,
-            'timestamp': datetime.utcnow().isoformat(),
+            'message_id': message_id,
+            'conversation_id': conversation_id,
+            'agent_id': agent_id,
+            'timestamp': timestamp_str,
             'message': message,
             'response': response,
             'interaction_type': interaction_type,
-            'metadata': metadata or {},
-            'quiz_data': quiz_data,
-            'quiz_answers': quiz_answers,
-            'quiz_feedback': quiz_feedback
+            'dify_metadata': dify_metadata or {}
         }
         
-        table.put_item(Item=interaction)
+        # Add optional fields if present
+        if quiz_data:
+            item['quiz_data'] = quiz_data
+        if usage_metrics:
+            item['usage_metrics'] = usage_metrics
+        
+        print("\nPrepared DynamoDB item:")
+        print(f"username: {item['username']}")
+        print(f"message_id: {item['message_id']}")
+        print(f"conversation_id: {item['conversation_id']}")
+        print(f"agent_id: {item['agent_id']}")
+        print(f"timestamp: {item['timestamp']}")
+        print(f"message length: {len(item['message'])}")
+        print(f"response length: {len(item['response'])}")
+        print(f"interaction_type: {item['interaction_type']}")
+        print(f"dify_metadata keys: {list(item['dify_metadata'].keys())}")
+        if 'quiz_data' in item:
+            print(f"quiz_data present: {bool(item['quiz_data'])}")
+        if 'usage_metrics' in item:
+            print(f"usage_metrics present: {bool(item['usage_metrics'])}")
+        
+        print("\nAttempting to save to DynamoDB...")
+        # Save to DynamoDB
+        table = dynamodb.Table(CHATS_TABLE)
+        response = table.put_item(Item=item)
+        
+        print(f"DynamoDB response: {response}")
+        print("=== Save completed successfully ===")
         return True
+        
     except Exception as e:
-        print(f"Error saving chat interaction: {str(e)}")
+        print(f"Error saving chat message: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return False
 
-def get_chat_history(username: str) -> List[Dict]:
-    """Get user's chat history with enhanced metadata"""
+def get_chat_history(username: str, conversation_id: Optional[str] = None) -> List[dict]:
+    """Get chat history for a user, optionally filtered by conversation_id"""
     try:
-        table = dynamodb.Table(CHAT_TABLE)
-        response = table.query(
-            KeyConditionExpression='username = :username',
-            ExpressionAttributeValues={':username': username},
-            ScanIndexForward=False  # Most recent first
-        )
+        table = dynamodb.Table('chat_messages')
+        
+        if conversation_id:
+            # Get messages for specific conversation
+            response = table.query(
+                KeyConditionExpression='username = :username AND conversation_id = :conversation_id',
+                ExpressionAttributeValues={
+                    ':username': username,
+                    ':conversation_id': conversation_id
+                },
+                ScanIndexForward=True  # Get messages in chronological order
+            )
+        else:
+            # Get all messages for user
+            response = table.query(
+                KeyConditionExpression='username = :username',
+                ExpressionAttributeValues={
+                    ':username': username
+                },
+                ScanIndexForward=True
+            )
+        
         return response.get('Items', [])
     except Exception as e:
         print(f"Error getting chat history: {str(e)}")
         return []
 
+def get_conversations(username: str) -> List[dict]:
+    """Get all unique conversations for a user"""
+    try:
+        table = dynamodb.Table('chat_messages')
+        
+        # Get all messages for user
+        response = table.query(
+            KeyConditionExpression='username = :username',
+            ExpressionAttributeValues={
+                ':username': username
+            }
+        )
+        
+        # Extract unique conversations
+        conversations = {}
+        for item in response.get('Items', []):
+            conv_id = item['conversation_id']
+            if conv_id not in conversations:
+                conversations[conv_id] = {
+                    'conversation_id': conv_id,
+                    'last_message': item['message'],
+                    'last_timestamp': item['timestamp'],
+                    'message_count': 0
+                }
+            conversations[conv_id]['message_count'] += 1
+        
+        # Convert to list and sort by last timestamp
+        return sorted(
+            list(conversations.values()),
+            key=lambda x: x['last_timestamp'],
+            reverse=True
+        )
+    except Exception as e:
+        print(f"Error getting conversations: {str(e)}")
+        return []
+
 def get_user_quiz_history(username: str) -> List[Dict]:
     """Get user's quiz history"""
     try:
-        table = dynamodb.Table(CHAT_TABLE)
-        response = table.query(
-            KeyConditionExpression='username = :username',
-            FilterExpression='interaction_type = :type',
+        table = dynamodb.Table(CHATS_TABLE)
+        response = table.scan(
+            FilterExpression='username = :username AND interaction_type = :type',
             ExpressionAttributeValues={
                 ':username': username,
                 ':type': 'quiz'
-            },
-            ScanIndexForward=False
+            }
         )
         return response.get('Items', [])
     except Exception as e:
         print(f"Error getting quiz history: {str(e)}")
         return []
+
+def update_conversation_activity(conversation_id: str) -> bool:
+    """Update conversation's last activity timestamp"""
+    try:
+        table = dynamodb.Table(CONVERSATIONS_TABLE)
+        table.update_item(
+            Key={'conversation_id': conversation_id},
+            UpdateExpression='SET last_activity = :now',
+            ExpressionAttributeValues={
+                ':now': datetime.utcnow().isoformat()
+            }
+        )
+        return True
+    except Exception as e:
+        print(f"Error updating conversation activity: {str(e)}")
+        return False
+
+def update_conversation_id(username: str, dify_conversation_id: str) -> bool:
+    """Update conversation with Dify's conversation ID"""
+    try:
+        table = dynamodb.Table(CONVERSATIONS_TABLE)
+        table.update_item(
+            Key={'username': username},
+            UpdateExpression='SET conversation_id = :conv_id, created_at = :now, last_activity = :now',
+            ExpressionAttributeValues={
+                ':conv_id': dify_conversation_id,
+                ':now': datetime.utcnow().isoformat()
+            }
+        )
+        return True
+    except Exception as e:
+        print(f"Error updating conversation ID: {str(e)}")
+        return False
 
 # End of file - removing reset_database function 

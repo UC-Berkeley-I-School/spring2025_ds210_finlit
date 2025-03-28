@@ -6,152 +6,196 @@ Core functionality:
 3. Save basic chat interactions
 4. Return essential response data
 """
-import httpx
-from typing import Dict
-from datetime import datetime
-from ..database import save_chat_interaction
-from ..config import AGENT_CONFIGS
+import os
 import json
+import requests
+from sseclient import SSEClient
+from typing import Dict, AsyncGenerator, Optional, Any, List
+from datetime import datetime
+from ..database import save_chat_message, get_chat_history
+from ..config import AGENT_CONFIGS, ACTIVE_AGENT_VERSION
 
 class DifyService:
-    def __init__(self, agent_type: str = "dify", version: str = "v1"):
+    def __init__(self):
         """Initialize DifyService with configuration and headers"""
-        self.config = AGENT_CONFIGS[agent_type][version]
+        self.conversation_id = None  # Initialize conversation_id as None
+        self.config = AGENT_CONFIGS[ACTIVE_AGENT_VERSION]
         self.headers = {
             "Authorization": f"Bearer {self.config['api_key']}",
             "Content-Type": "application/json"
         }
         print(f"Initialized DifyService with base_url: {self.config['base_url']}")
 
-    async def process_message(
+    def _extract_usage_metrics(self, message_end_data: Dict) -> Dict:
+        """Extract usage metrics from message_end event"""
+        usage = message_end_data.get('usage', {})
+        return {
+            'prompt_tokens': usage.get('prompt_tokens', 0),
+            'completion_tokens': usage.get('completion_tokens', 0),
+            'total_tokens': usage.get('total_tokens', 0),
+            'pricing': {
+                'prompt_price': usage.get('prompt_price', '0'),
+                'completion_price': usage.get('completion_price', '0'),
+                'total_price': usage.get('total_price', '0'),
+                'currency': usage.get('currency', 'USD')
+            }
+        }
+
+    def _extract_dify_metadata(self, message_data: Dict) -> Dict:
+        """Extract Dify-specific metadata from message event"""
+        return {
+            'message_files': message_data.get('message_files', []),
+            'feedback': message_data.get('feedback', None),
+            'retriever_resources': message_data.get('retriever_resources', []),
+            'agent_thoughts': message_data.get('agent_thoughts', [])
+        }
+
+    def get_conversation_id(self):
+        """Get current conversation ID"""
+        return self.conversation_id
+
+    def set_conversation_id(self, conversation_id):
+        """Set conversation ID"""
+        self.conversation_id = conversation_id
+        print(f"Set conversation_id to: {conversation_id}")  # Debug log
+
+    def process_message(
         self,
         username: str,
         message: str,
         profile_data: Dict
     ) -> Dict:
-        """Process message and get response from Dify"""
+        """Process a message through Dify"""
         try:
-            # Extract only required profile fields
+            # Extract profile data from the structured format
+            profile1 = profile_data.get("profile1", {})
+            profile2 = profile_data.get("profile2", {})
+            
+            # Map profile data to Dify inputs
             required_inputs = {
-                k: profile_data.get(k, "") for k in self.config["required_inputs"]
-            }
-            
-            # Handle initial topic selection
-            if message in ["1", "2", "3"]:
-                topic_map = {
-                    "1": "Creating a budget",
-                    "2": "Saving strategies",
-                    "3": "Tips for sending money home"
-                }
-                message = f"I want to learn about {topic_map[message]}"
-            
-            # Prepare request with required inputs
-            request_data = {
-                "inputs": required_inputs,
-                "query": message,
-                "response_mode": "streaming",
-                "conversation_id": profile_data.get("conversation_id", ""),  # Use existing conversation if available
-                "user": username
+                "number_of_dependents": str(profile1.get("number_of_dependents", "")),
+                "bank_account": str(profile2.get("bank_account", "")),
+                "debt_information": str(profile2.get("debt_information", "")),
+                "remittance_information": str(profile2.get("remittance_information", "")),
+                "remittance_amount": str(profile2.get("remittance_amount", "")),
+                "housing": str(profile1.get("housing", "")),
+                "job_title": str(profile1.get("job_title", "")),
+                "education_level": str(profile1.get("education_level", ""))
             }
             
             print(f"Initializing Dify API request...")
             print(f"Base URL: {self.config['base_url']}")
             print(f"Headers: {self.headers}")
-            print(f"Request data: {request_data}")
-            
-            # Call Dify API
-            async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-                try:
-                    print(f"Sending request to Dify API endpoint: {self.config['base_url']}/v1/chat-messages")
-                    response = await client.post(
-                        f"{self.config['base_url']}/v1/chat-messages",
-                        headers=self.headers,
-                        json=request_data
-                    )
-                    
-                    print(f"Response status code: {response.status_code}")
-                    print(f"Response headers: {response.headers}")
-                    
-                    if response.status_code != 200:
-                        print(f"Dify API error response: {response.text}")
-                        raise Exception(f"Dify API error (status {response.status_code}): {response.text}")
-                    
-                    # Handle streaming response
-                    full_response = ""
-                    message_id = None
-                    conversation_id = None
-                    last_data = None
-                    
-                    print("Starting to process streaming response...")
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            try:
-                                data = json.loads(line[6:])
-                                print(f"Received streaming data event: {data.get('event')}")
-                                
-                                if data.get("event") in ["agent_message", "agent_thought", "message"]:
-                                    # Update message_id and conversation_id from any valid event
-                                    if not message_id and data.get("message_id"):
-                                        message_id = data.get("message_id")
-                                        print(f"Captured message_id: {message_id}")
-                                    if not conversation_id and data.get("conversation_id"):
-                                        conversation_id = data.get("conversation_id")
-                                        print(f"Captured conversation_id: {conversation_id}")
-                                    # Append answer content if present for agent_message events
-                                    if data.get("event") == "agent_message" and "answer" in data:
-                                        current_answer = data["answer"]
-                                        print(f"Adding to response: {current_answer}")
-                                        full_response += current_answer
-                                elif data.get("event") == "error":
-                                    print(f"Received error event: {data.get('message')}")
-                                    raise Exception(f"Dify API streaming error: {data.get('message')}")
-                                elif data.get("event") == "done":
-                                    print("Received done event - stream complete")
-                                    break
-                                
-                                # Store the last data received
-                                last_data = data
-                                
-                            except json.JSONDecodeError as e:
-                                print(f"Failed to parse streaming JSON: {str(e)}")
-                                continue
-                    
-                    print(f"Stream processing complete")
-                    print(f"Final complete response: {full_response}")
-                    print(f"Final Message ID: {message_id}")
-                    print(f"Final Conversation ID: {conversation_id}")
-                    
-                    if not message_id or not conversation_id:
-                        if last_data:
-                            print(f"Last received data: {last_data}")
-                        raise Exception("Failed to receive valid message_id or conversation_id")
-                    
-                    # Save basic chat interaction with metadata
-                    save_chat_interaction(
-                        username=username,
-                        message=message,
-                        response=full_response,
-                        interaction_type="content",
-                        metadata={
-                            "profile_data": required_inputs,
-                            "message_id": message_id,
-                            "conversation_id": conversation_id,
-                            "created_at": datetime.utcnow().isoformat()
-                        }
-                    )
-                    
-                    # Return essential response data
-                    return {
-                        "message": full_response,
-                        "timestamp": datetime.utcnow(),
-                        "message_id": message_id,
-                        "conversation_id": conversation_id
-                    }
-                    
-                except httpx.RequestError as e:
-                    print(f"Request error: {str(e)}")
-                    raise Exception(f"Failed to connect to Dify API: {str(e)}")
-                
+            print(f"Profile data received: {profile_data}")
+            print(f"Mapped inputs for Dify: {required_inputs}")
+
+            # Prepare request data
+            request_data = {
+                "inputs": required_inputs,
+                "query": message,
+                "response_mode": "streaming",
+                "user": username,
+                "conversation_id": profile_data.get("conversation_id", "")  # Use existing conversation if available
+            }
+
+            print(f"Sending request to Dify: {json.dumps(request_data, indent=2)}")
+
+            # Make request to Dify
+            response = requests.post(
+                f"{self.config['base_url']}/v1/chat-messages",
+                headers=self.headers,
+                json=request_data,
+                stream=True
+            )
+
+            print(f"Response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"Response body: {response.text}")
+                return None
+
+            # Initialize response tracking variables
+            message_id = None
+            conversation_id = None
+            full_response = ""
+            dify_metadata = {
+                "message_files": [],
+                "feedback": None,
+                "retriever_resources": [],
+                "agent_thoughts": []
+            }
+            usage_metrics = None
+
+            # Process streaming response
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        line = line.decode('utf-8')
+                        if line.startswith('data: '):
+                            data = json.loads(line[6:])
+                            event_type = data.get('event')
+                            print(f"\nReceived event type: {event_type}")
+                            print(f"Complete event data: {json.dumps(data, indent=2)}")
+                            
+                            if event_type == 'agent_message':
+                                # Store message_id and conversation_id from any agent_message event
+                                if not message_id and data.get('message_id'):
+                                    message_id = data.get('message_id')
+                                if not conversation_id and data.get('conversation_id'):
+                                    conversation_id = data.get('conversation_id')
+                                # Yield the chunk for streaming
+                                yield {'event': 'agent_message', 'data': data}
+                            
+                            elif event_type == 'agent_thought':
+                                # This contains the complete response
+                                full_response = data.get('thought', '')
+                                # Update metadata
+                                dify_metadata['agent_thoughts'].append({
+                                    'thought': data.get('thought', ''),
+                                    'observation': data.get('observation', ''),
+                                    'tool': data.get('tool', ''),
+                                    'tool_labels': data.get('tool_labels', {})
+                                })
+                                # Yield the complete thought for streaming
+                                yield {'event': 'agent_thought', 'data': data}
+                            
+                            elif event_type == 'message_end':
+                                # Get usage metrics
+                                usage_metrics = data.get('metadata', {}).get('usage', {})
+                                if conversation_id:
+                                    self.set_conversation_id(conversation_id)
+                                yield {'event': 'message_end', 'data': data}
+                            
+                            elif event_type == 'error':
+                                print(f"Received error event: {data.get('message')}")
+                                yield {'error': data.get('message', 'Unknown error')}
+                                return
+                            
+                    except json.JSONDecodeError as e:
+                        print(f"Error decoding JSON: {str(e)}")
+                        continue
+                    except Exception as e:
+                        print(f"Error processing line: {str(e)}")
+                        continue
+
+            print(f"\nFinal response data:")
+            print(f"message_id: {message_id}")
+            print(f"conversation_id: {conversation_id}")
+            print(f"full_response: {full_response}")
+            print(f"dify_metadata: {json.dumps(dify_metadata, indent=2)}")
+            print(f"usage_metrics: {json.dumps(usage_metrics, indent=2)}")
+
+            return {
+                'message_id': message_id,
+                'conversation_id': conversation_id,
+                'response': full_response,
+                'dify_metadata': dify_metadata,
+                'usage_metrics': usage_metrics
+            }
+
         except Exception as e:
-            print(f"Error in process_message: {str(e)}")
-            raise Exception(f"Error in process_message: {str(e)}") 
+            print(f"Error processing message: {str(e)}")
+            return None
+
+    def get_chat_history(self, username: str, conversation_id: Optional[str] = None) -> List[Dict]:
+        """Get chat history for a user"""
+        return get_chat_history(username, conversation_id) 

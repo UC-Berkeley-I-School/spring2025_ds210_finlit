@@ -6,14 +6,16 @@ import json
 # Initialize session states
 if 'access_token' not in st.session_state:
     st.session_state.access_token = None
+if 'username' not in st.session_state:
+    st.session_state.username = None
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
-if 'user_profile' not in st.session_state:
-    st.session_state.user_profile = None
 if 'current_topic' not in st.session_state:
     st.session_state.current_topic = None
 if 'user_input' not in st.session_state:
     st.session_state.user_input = ""
+if 'conversation_id' not in st.session_state:
+    st.session_state.conversation_id = None
 if 'quiz_state' not in st.session_state:
     st.session_state.quiz_state = {
         'active': False,
@@ -21,6 +23,24 @@ if 'quiz_state' not in st.session_state:
         'answers': [],
         'questions': []
     }
+if 'conversations' not in st.session_state:
+    st.session_state.conversations = []
+
+# Get username from token if not set
+if st.session_state.access_token and not st.session_state.username:
+    try:
+        # Get username from token
+        response = requests.get(
+            "http://localhost:8001/token/verify",
+            headers={"Authorization": f"Bearer {st.session_state.access_token}"}
+        )
+        if response.status_code == 200:
+            user_data = response.json()
+            st.session_state.username = user_data.get("username")
+            print(f"Got username from token: {st.session_state.username}")
+    except Exception as e:
+        print(f"Error getting username from token: {str(e)}")
+        st.error("Error initializing user session")
 
 # Page configuration
 st.set_page_config(
@@ -48,12 +68,15 @@ st.markdown("""
     .user-message {
         background-color: #2E8B57;
         color: white;
-        padding: 1rem;
+        padding: 0.75rem 1rem;
         border-radius: 15px 15px 0 15px;
         margin: 0.5rem 0;
-        max-width: 80%;
+        max-width: 60%;
         margin-left: auto;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: inline-block;
+        float: right;
+        clear: both;
     }
     
     .assistant-message {
@@ -64,6 +87,9 @@ st.markdown("""
         margin: 0.5rem 0;
         max-width: 80%;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: inline-block;
+        float: left;
+        clear: both;
     }
 
     .message-content {
@@ -74,6 +100,11 @@ st.markdown("""
         font-size: 0.8rem;
         color: #666;
         text-align: right;
+    }
+
+    /* Clear floats after messages */
+    .message-container {
+        clear: both;
     }
 
     /* Option buttons */
@@ -152,10 +183,10 @@ def get_user_profile():
             user_data = user_response.json()
             # Extract and validate required profile data
             profile_data = {
-                "dependents_count": user_data.get("profile1", {}).get("number_of_dependents", ""),
+                "number_of_dependents": user_data.get("profile1", {}).get("number_of_dependents", ""),
                 "bank_account": user_data.get("profile2", {}).get("bank_account", ""),
-                "debt_status": user_data.get("profile2", {}).get("debt_information", ""),
-                "remittance_status": user_data.get("profile2", {}).get("remittance_information", ""),
+                "debt_information": user_data.get("profile2", {}).get("debt_information", ""),
+                "remittance_information": user_data.get("profile2", {}).get("remittance_information", ""),
                 "remittance_amount": user_data.get("profile2", {}).get("remittance_amount", ""),
                 "country_of_origin": user_data.get("profile1", {}).get("country_of_origin", ""),
                 "time_in_uae": user_data.get("profile1", {}).get("time_in_uae", ""),
@@ -178,6 +209,73 @@ def get_user_profile():
         st.error(f"Error fetching profile: {str(e)}")
         return None
 
+def get_initial_message():
+    """Get the initial welcome message from the Dify agent"""
+    try:
+        # Get user profile data
+        profile_data = get_user_profile()
+        if not profile_data:
+            st.error("Failed to get user profile. Please complete your profile first.")
+            return
+        
+        # Show thinking indicator
+        with st.spinner("Thinking..."):
+            # Send request with streaming
+            with requests.post(
+                "http://localhost:8001/api/chat",
+                headers={"Authorization": f"Bearer {st.session_state.access_token}"},
+                json={
+                    "message": "Please start a new conversation and provide the opening statement so we can get started",
+                    "username": st.session_state.username,
+                    "profile_data": profile_data
+                },
+                stream=True
+            ) as response:
+                if response.status_code == 200:
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                data = line[6:]  # Remove 'data: ' prefix
+                                if data == '[DONE]':
+                                    break
+                                try:
+                                    chunk = json.loads(data)
+                                    print(f"Frontend received chunk: {chunk}")  # Debug log
+                                    
+                                    # Handle different event types
+                                    if 'event' in chunk:
+                                        if chunk['event'] == 'agent_thought':
+                                            # This contains the complete response
+                                            assistant_message = chunk.get('data', {}).get('thought', '')
+                                            print(f"Received complete message: {assistant_message}")
+                                            # Add the complete assistant message to chat history
+                                            st.session_state.chat_history.append({
+                                                "role": "assistant",
+                                                "content": assistant_message,
+                                                "timestamp": datetime.now().strftime("%H:%M")
+                                            })
+                                        elif chunk['event'] == 'message_end':
+                                            print("Received message_end event")
+                                            if 'conversation_id' in chunk:
+                                                st.session_state.conversation_id = chunk['conversation_id']
+                                                print(f"Received conversation ID: {chunk['conversation_id']}")
+                                    
+                                    # Handle errors
+                                    if 'error' in chunk:
+                                        st.error(f"Error: {chunk['error']}")
+                                        break
+                                except json.JSONDecodeError:
+                                    print(f"Error decoding JSON: {data}")
+                                    continue
+                else:
+                    error_data = response.json()
+                    st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
+                    
+    except Exception as e:
+        st.error(f"Error getting initial message: {str(e)}")
+        print(f"Error details: {str(e)}")
+
 def send_message():
     """Send message to backend and update chat history"""
     if not st.session_state.user_input:
@@ -187,125 +285,141 @@ def send_message():
     message = st.session_state.user_input
     st.session_state.user_input = ""
     
-    # Get user profile data
-    profile_data = get_user_profile()
+    # Add user message to chat history immediately
+    st.session_state.chat_history.append({
+        "role": "user",
+        "content": message,
+        "timestamp": datetime.now().strftime("%H:%M")
+    })
     
-    # Send message to backend
     try:
         print(f"Sending message to backend: {message}")
-        response = requests.post(
-            "http://localhost:8001/api/chat",
-            headers={"Authorization": f"Bearer {st.session_state.access_token}"},
-            json={"message": message, "profile_data": profile_data},
-            timeout=60  # Add explicit timeout
-        )
         
-        print(f"Received response status: {response.status_code}")
-        
-        # Enhanced error handling
-        if response.status_code == 401:
-            st.error("Your session has expired. Please log in again.")
-            st.switch_page("pages/1_Login.py")
-            return
-        elif response.status_code == 404:
-            st.error("The chat service is currently unavailable. Please try again later.")
-            return
-        elif response.status_code == 500:
-            st.error("An internal server error occurred. Please try again later.")
-            return
-        elif response.status_code != 200:
-            error_message = response.json().get("message", "Unknown error occurred")
-            st.error(f"Failed to get response from AI coach: {error_message}")
+        # Get user profile data
+        profile_data = get_user_profile()
+        if not profile_data:
+            st.error("Failed to get user profile. Please complete your profile first.")
             return
         
-        data = response.json()
-        print(f"Received response data: {data}")
-        
-        if not data.get("message"):
-            st.error("Received empty response from AI coach")
-            return
-            
-        # Clear previous chat history
-        st.session_state.chat_history = []
-        
-        # Add the full response to chat history
-        st.session_state.chat_history.append({
-            "role": "assistant",
-            "content": data["message"],
-            "timestamp": data.get("timestamp"),
-            "message_id": data.get("message_id"),
-            "conversation_id": data.get("conversation_id")
-        })
-        
-        print(f"Updated chat history: {st.session_state.chat_history}")
-        
-        # Handle quiz if present
-        if data.get("quiz"):
-            st.session_state.current_quiz = data["quiz"]
-            st.session_state.quiz_answers = []
-            st.session_state.showing_quiz = True
-            
-        # Rerun the app to refresh the page with new chat history
-        st.rerun()
-            
-    except requests.Timeout:
-        st.error("The request is taking longer than expected. Please try again.")
-        return
-    except requests.exceptions.ConnectionError:
-        st.error("Could not connect to the server. Please check your internet connection and try again.")
+        # Show thinking indicator
+        with st.spinner("Thinking..."):
+            # Send request with streaming
+            with requests.post(
+                "http://localhost:8001/api/chat",
+                headers={"Authorization": f"Bearer {st.session_state.access_token}"},
+                json={
+                    "message": message,
+                    "username": st.session_state.username,
+                    "profile_data": profile_data,
+                    "conversation_id": st.session_state.conversation_id
+                },
+                stream=True
+            ) as response:
+                if response.status_code == 200:
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                data = line[6:]  # Remove 'data: ' prefix
+                                if data == '[DONE]':
+                                    break
+                                try:
+                                    chunk = json.loads(data)
+                                    print(f"Frontend received chunk: {chunk}")  # Debug log
+                                    
+                                    # Handle different event types
+                                    if 'event' in chunk:
+                                        if chunk['event'] == 'agent_thought':
+                                            # This contains the complete response
+                                            assistant_message = chunk.get('data', {}).get('thought', '')
+                                            print(f"Received complete message: {assistant_message}")
+                                            # Add the complete assistant message to chat history
+                                            st.session_state.chat_history.append({
+                                                "role": "assistant",
+                                                "content": assistant_message,
+                                                "timestamp": datetime.now().strftime("%H:%M")
+                                            })
+                                        elif chunk['event'] == 'message_end':
+                                            print("Received message_end event")
+                                            if 'conversation_id' in chunk:
+                                                st.session_state.conversation_id = chunk['conversation_id']
+                                                print(f"Received conversation ID: {chunk['conversation_id']}")
+                                    
+                                    # Handle errors
+                                    if 'error' in chunk:
+                                        st.error(f"Error: {chunk['error']}")
+                                        break
+                                except json.JSONDecodeError:
+                                    print(f"Error decoding JSON: {data}")
+                                    continue
+                else:
+                    error_data = response.json()
+                    st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
+                    
     except Exception as e:
-        print(f"Error in send_message: {str(e)}")
-        st.error(f"An unexpected error occurred: {str(e)}")
-        st.error("Please try again or contact support if the problem persists.")
+        st.error(f"Error sending message: {str(e)}")
+        print(f"Error details: {str(e)}")
 
-def render_quiz_interface(quiz_data: dict):
-    """Render the quiz interface"""
-    st.markdown("### Quiz Time! 📝")
-    
-    for i, question in enumerate(quiz_data['questions']):
-        st.markdown(f"**Question {i+1}:** {question['question']}")
-        
-        # Show options as buttons
-        for j, option in enumerate(question['options']):
-            if st.button(f"{j+1}. {option}", key=f"quiz_q{i}_opt{j}"):
-                # Handle answer submission
-                response = send_message()
-                if response and response.get('interaction_type') == 'feedback':
-                    st.markdown(f"**Feedback:** {response['message']}")
-                    st.rerun()
+def load_conversations():
+    """Load user's conversations from the backend"""
+    try:
+        response = requests.get(
+            "http://localhost:8001/api/chat/conversations",
+            headers={"Authorization": f"Bearer {st.session_state.access_token}"}
+        )
+        if response.status_code == 200:
+            st.session_state.conversations = response.json().get("conversations", [])
+        else:
+            st.error("Failed to load conversations")
+    except Exception as e:
+        st.error(f"Error loading conversations: {str(e)}")
+
+def load_chat_history(conversation_id: str):
+    """Load chat history for a specific conversation"""
+    try:
+        response = requests.get(
+            f"http://localhost:8001/api/chat/history?conversation_id={conversation_id}",
+            headers={"Authorization": f"Bearer {st.session_state.access_token}"}
+        )
+        if response.status_code == 200:
+            messages = response.json().get("messages", [])
+            st.session_state.chat_history = [
+                {
+                    "role": "assistant" if msg.get("role") == "assistant" else "user",
+                    "content": msg.get("message", ""),
+                    "timestamp": datetime.fromisoformat(msg.get("timestamp")).strftime("%H:%M")
+                }
+                for msg in messages
+            ]
+            st.session_state.conversation_id = conversation_id
+        else:
+            st.error("Failed to load chat history")
+    except Exception as e:
+        st.error(f"Error loading chat history: {str(e)}")
 
 def render_chat_interface():
     """Render the chat interface"""
+    # Load conversations if not already loaded
+    if not st.session_state.conversations:
+        load_conversations()
+    
     # Create a container for chat messages
     chat_container = st.container()
     
     # Display chat history with improved formatting
     with chat_container:
-        # If chat history is empty, show initial welcome message
+        # If chat history is empty, get initial message from agent
         if not st.session_state.chat_history:
-            welcome_message = {
-                "role": "assistant",
-                "content": """Hello! I am your financial education bot. Let's talk about how to create a budget and save money.
-
-Budgeting is important because it helps you manage your money better. You can see where your money goes and how much you can save. Would you like to learn about:
-
-1. Creating a budget
-2. Saving strategies
-3. Tips for sending money home
-
-Please choose a number to continue.""",
-                "timestamp": datetime.now().strftime("%H:%M")
-            }
-            st.session_state.chat_history.append(welcome_message)
+            get_initial_message()  # This will handle adding to chat history internally
         
-        # Display all messages including welcome message
+        # Display all messages in chronological order
         for message in st.session_state.chat_history:
             if message["role"] == "user":
-                st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="message-container"><div class="user-message">{message["content"]}</div></div>', unsafe_allow_html=True)
             else:
                 # Add timestamp to assistant messages
                 timestamp = message.get("timestamp", datetime.now().strftime("%H:%M"))
-                st.markdown(f'<div class="assistant-message"><div class="message-content">{message["content"]}</div><div class="message-timestamp">{timestamp}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="message-container"><div class="assistant-message"><div class="message-content">{message["content"]}</div><div class="message-timestamp">{timestamp}</div></div></div>', unsafe_allow_html=True)
     
     # Chat input for free-form conversation
     if prompt := st.chat_input("Ask your question here..."):
@@ -313,14 +427,9 @@ Please choose a number to continue.""",
         # Show loading state
         with st.spinner("Thinking..."):
             send_message()
-            st.rerun()
 
 # Main page content
 st.title("🌱 AspAIra Financial Coach")
-
-# Check if profile exists
-if not st.session_state.user_profile:
-    st.session_state.user_profile = get_user_profile()
 
 # Render chat interface
 render_chat_interface() 

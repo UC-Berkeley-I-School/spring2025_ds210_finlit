@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal, List, Dict
+from typing import Optional, Dict, List, Literal, Any
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -9,8 +9,11 @@ class UserCreate(UserBase):
     password: str
 
 class User(UserBase):
-    id: str
     is_active: bool = True
+    profile1: Optional[Dict] = None
+    profile2: Optional[Dict] = None
+    created_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
 
 class ProfilePart1(BaseModel):
     country_of_origin: Literal["Filipino", "Kenyan", "Sri Lankan"]
@@ -39,6 +42,7 @@ class TokenData(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    conversation_id: Optional[str] = None
     agent_type: str = "dify"  # Default to dify for now
     agent_version: str = "v1"  # Default to v1 for now
 
@@ -69,10 +73,68 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
-class UserProfile(BaseModel):
+# New conversation models
+class ConversationMetadata(BaseModel):
+    total_messages: int = 0
+    total_duration: int = 0
+    topics_covered: List[str] = []
+
+class Conversation(BaseModel):
+    conversation_id: str
     username: str
-    dependents_count: Optional[str] = None
-    bank_account: Optional[str] = None
-    debt_status: Optional[str] = None
-    remittance_status: Optional[str] = None
-    remittance_amount: Optional[str] = None 
+    agent_id: str
+    created_at: datetime
+    last_activity: datetime
+    status: str
+    metadata: ConversationMetadata
+
+class RetrieverResource(BaseModel):
+    position: int
+    content: str
+    metadata: Dict = Field(default_factory=dict)
+
+class TokenUsage(BaseModel):
+    prompt_tokens: int
+    prompt_unit_price: str
+    prompt_price_unit: str
+    prompt_price: str
+    completion_tokens: int
+    completion_unit_price: str
+    completion_price_unit: str
+    completion_price: str
+    total_tokens: int
+    total_price: str
+    currency: str
+    latency: float
+
+class ChatMetadata(BaseModel):
+    message_length: int
+    request_timestamp: str
+    response_timestamp: str
+    latency_ms: float
+    usage: TokenUsage
+    retriever_resources: Optional[List[RetrieverResource]] = None
+
+class QuizData(BaseModel):
+    questions: List[str]
+    answers: List[str]
+    score: float
+    feedback: str
+
+class ChatMessage(BaseModel):
+    """Model for chat messages stored in the database"""
+    message_id: str
+    conversation_id: str
+    username: str
+    agent_id: str
+    timestamp: datetime
+    message: str
+    response: str
+    interaction_type: str
+    dify_metadata: Optional[dict] = None
+    quiz_data: Optional[dict] = None
+    usage_metrics: Optional[dict] = None
+
+class ChatHistory(BaseModel):
+    """Model for chat history response"""
+    messages: List[ChatMessage] 
