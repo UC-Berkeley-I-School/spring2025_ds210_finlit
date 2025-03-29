@@ -14,6 +14,7 @@ import streamlit as st
 import requests
 from sseclient import SSEClient
 from datetime import datetime
+from fastapi import Request
 
 app = FastAPI(**API_CONFIG)
 
@@ -133,6 +134,7 @@ async def chat(
         print("\n=== Starting Chat Request ===")
         print(f"Current user: {current_user}")
         print(f"Chat request: {chat_request}")
+        print(f"Conversation ID from request: {chat_request.conversation_id}")
         
         # Use profile data directly from current_user
         profile_data = {
@@ -160,11 +162,12 @@ async def chat(
                 
                 try:
                     print("\nCalling Dify service process_message...")
-                    # Process message through Dify
+                    # Process message through Dify with conversation_id
                     for event in dify_service.process_message(
                         username=current_user["username"],
                         message=chat_request.message,
-                        profile_data=profile_data
+                        profile_data=profile_data,
+                        conversation_id=chat_request.conversation_id  # Pass conversation_id directly
                     ):
                         try:
                             print("\n=== New Event Received ===")
@@ -225,6 +228,9 @@ async def chat(
                                         if success:
                                             chat_data['has_saved'] = True
                                             print("Successfully saved chat message")
+                                            # Send single simplified response after successful save
+                                            yield f"data: {json.dumps({'conversation_id': chat_data['conversation_id'], 'response': chat_data['response']})}\n\n"
+                                            yield "data: [DONE]\n\n"  # Signal completion
                                         else:
                                             print("Failed to save chat message")
                                     except Exception as e:
@@ -246,9 +252,6 @@ async def chat(
                             elif event.get('event') == 'error':
                                 print(f"\nError event received: {event.get('error')}")
                                 return
-                            
-                            # Stream the event to frontend
-                            yield f"data: {json.dumps({'event': event.get('event'), 'data': event.get('data', {})})}\n\n"
                                 
                         except Exception as e:
                             print(f"\nError processing event: {str(e)}")
@@ -351,9 +354,17 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/token/verify")
-async def verify_token(current_user: dict = Depends(get_current_user)):
-    """Verify token and return user data"""
-    return {"username": current_user["username"]}
+async def verify_token(request: Request):
+    """Verify JWT token and return user data"""
+    try:
+        current_user = await get_current_user(request)
+        return {"username": current_user["username"]}
+    except Exception as e:
+        print(f"Backend: Error verifying token - {str(e)}")
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid token"}
+        )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

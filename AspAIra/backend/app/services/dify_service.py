@@ -63,7 +63,8 @@ class DifyService:
         self,
         username: str,
         message: str,
-        profile_data: Dict
+        profile_data: Dict,
+        conversation_id: Optional[str] = None
     ) -> Dict:
         """Process a message through Dify"""
         try:
@@ -88,6 +89,7 @@ class DifyService:
             print(f"Headers: {self.headers}")
             print(f"Profile data received: {profile_data}")
             print(f"Mapped inputs for Dify: {required_inputs}")
+            print(f"Conversation ID: {conversation_id}")
 
             # Prepare request data
             request_data = {
@@ -95,7 +97,7 @@ class DifyService:
                 "query": message,
                 "response_mode": "streaming",
                 "user": username,
-                "conversation_id": profile_data.get("conversation_id", "")  # Use existing conversation if available
+                "conversation_id": conversation_id  # Use the passed conversation_id directly
             }
 
             print(f"Sending request to Dify: {json.dumps(request_data, indent=2)}")
