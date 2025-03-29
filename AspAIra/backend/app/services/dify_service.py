@@ -26,30 +26,6 @@ class DifyService:
         }
         print(f"Initialized DifyService with base_url: {self.config['base_url']}")
 
-    def _extract_usage_metrics(self, message_end_data: Dict) -> Dict:
-        """Extract usage metrics from message_end event"""
-        usage = message_end_data.get('usage', {})
-        return {
-            'prompt_tokens': usage.get('prompt_tokens', 0),
-            'completion_tokens': usage.get('completion_tokens', 0),
-            'total_tokens': usage.get('total_tokens', 0),
-            'pricing': {
-                'prompt_price': usage.get('prompt_price', '0'),
-                'completion_price': usage.get('completion_price', '0'),
-                'total_price': usage.get('total_price', '0'),
-                'currency': usage.get('currency', 'USD')
-            }
-        }
-
-    def _extract_dify_metadata(self, message_data: Dict) -> Dict:
-        """Extract Dify-specific metadata from message event"""
-        return {
-            'message_files': message_data.get('message_files', []),
-            'feedback': message_data.get('feedback', None),
-            'retriever_resources': message_data.get('retriever_resources', []),
-            'agent_thoughts': message_data.get('agent_thoughts', [])
-        }
-
     def get_conversation_id(self):
         """Get current conversation ID"""
         return self.conversation_id
@@ -72,17 +48,12 @@ class DifyService:
             profile1 = profile_data.get("profile1", {})
             profile2 = profile_data.get("profile2", {})
             
-            # Map profile data to Dify inputs
-            required_inputs = {
-                "number_of_dependents": str(profile1.get("number_of_dependents", "")),
-                "bank_account": str(profile2.get("bank_account", "")),
-                "debt_information": str(profile2.get("debt_information", "")),
-                "remittance_information": str(profile2.get("remittance_information", "")),
-                "remittance_amount": str(profile2.get("remittance_amount", "")),
-                "housing": str(profile1.get("housing", "")),
-                "job_title": str(profile1.get("job_title", "")),
-                "education_level": str(profile1.get("education_level", ""))
-            }
+            # Dynamically build required inputs based on config
+            required_inputs = {}
+            for input_name, input_config in self.config['required_inputs'].items():
+                source = input_config['source']
+                profile_data = profile1 if source == "profile1" else profile2
+                required_inputs[input_name] = str(profile_data.get(input_name, ""))
             
             print(f"Initializing Dify API request...")
             print(f"Base URL: {self.config['base_url']}")

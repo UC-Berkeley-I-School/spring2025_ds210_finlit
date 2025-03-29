@@ -12,6 +12,8 @@ class User(UserBase):
     is_active: bool = True
     profile1: Optional[Dict] = None
     profile2: Optional[Dict] = None
+    profile1_complete: bool = False
+    profile2_complete: bool = False
     created_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
 
@@ -21,7 +23,7 @@ class ProfilePart1(BaseModel):
     job_title: Literal["Live In maid", "Live out maid", "Cook", "Nanny"]
     housing: Literal["Live In", "Live Out", "Temporary Housing"]
     education_level: Literal["None", "Primary school", "High school", "College"]
-    number_of_dependents: Literal["None", "1", "2", "3", "More than 3"]
+    number_of_kids: Literal["None", "1", "2", "3", "More than 3"]
 
     class Config:
         populate_by_name = True
@@ -32,6 +34,10 @@ class ProfilePart2(BaseModel):
     remittance_information: Literal["Send money with Bank Transfer", "Send money with Exchange House", 
                                   "Send money offline", "Don't Send any money"]
     remittance_amount: Literal["Less than 100 AED", "100-500 AED", "500-1000 AED", "1000-2000 AED", "More than 2000 AED"]
+    financial_dependents: Literal["None", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"]
+
+    class Config:
+        populate_by_name = True
 
 class Token(BaseModel):
     access_token: str

@@ -171,7 +171,7 @@ with st.form("profile1_form"):
     job_title = st.selectbox("Job Title", ["", "Live In maid", "Live out maid", "Cook", "Nanny"])
     housing = st.selectbox("Housing", ["", "Live In", "Live Out", "Temporary Housing"])
     education_level = st.selectbox("Education Level", ["", "None", "Primary school", "High school", "College"])
-    number_of_dependents = st.selectbox("Number of Dependents", ["", "None", "1", "2", "3", "More than 3"])
+    number_of_kids = st.selectbox("Number of Kids", ["", "None", "1", "2", "3", "More than 3"])
 
     # Update button to match Profile2 style
     submitted = st.form_submit_button(
@@ -183,7 +183,7 @@ with st.form("profile1_form"):
     
     if submitted:
         # Check if any field is empty
-        if "" in [country_of_origin, time_in_uae, job_title, housing, education_level, number_of_dependents]:
+        if "" in [country_of_origin, time_in_uae, job_title, housing, education_level, number_of_kids]:
             st.error("Please fill all fields")
         else:
             data = {
@@ -192,7 +192,7 @@ with st.form("profile1_form"):
                 "job_title": job_title,
                 "housing": housing,
                 "education_level": education_level,
-                "number_of_dependents": number_of_dependents
+                "number_of_kids": number_of_kids
             }
             
             if update_profile(data):

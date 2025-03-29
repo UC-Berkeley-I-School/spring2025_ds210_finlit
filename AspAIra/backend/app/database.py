@@ -233,6 +233,9 @@ _create_tables_if_not_exists()
 def get_table():
     return dynamodb.Table(USERS_TABLE)
 
+class UserExistsError(Exception):
+    pass
+
 def create_user(username: str, password: str):
     print(f"Attempting to create user: {username}")
     hashed_password = pwd_context.hash(password)
@@ -244,7 +247,7 @@ def create_user(username: str, password: str):
         existing_user = table.get_item(Key={'username': username}).get('Item')
         if existing_user:
             print(f"User {username} already exists")
-            return False
+            raise UserExistsError(f"Username '{username}' already exists")
             
         # Create new user
         table.put_item(
@@ -254,12 +257,16 @@ def create_user(username: str, password: str):
                 'profile1': {},
                 'profile2': {},
                 'is_active': True,
+                'profile1_complete': False,
+                'profile2_complete': False,
                 'created_at': datetime.utcnow().isoformat(),
                 'last_login': datetime.utcnow().isoformat()
             }
         )
         print(f"Successfully created user: {username}")
         return True
+    except UserExistsError:
+        raise
     except ClientError as e:
         print(f"Error creating user: {str(e)}")
         raise
@@ -319,9 +326,10 @@ def update_profile_part1(username: str, profile_data: dict):
             Key={
                 'username': username
             },
-            UpdateExpression='SET profile1 = :profile_data',
+            UpdateExpression='SET profile1 = :profile_data, profile1_complete = :complete',
             ExpressionAttributeValues={
-                ':profile_data': profile_data
+                ':profile_data': profile_data,
+                ':complete': True
             },
             ReturnValues="UPDATED_NEW"
         )
@@ -341,9 +349,10 @@ def update_profile_part2(username: str, profile_data: dict):
             Key={
                 'username': username
             },
-            UpdateExpression='SET profile2 = :profile_data',
+            UpdateExpression='SET profile2 = :profile_data, profile2_complete = :complete',
             ExpressionAttributeValues={
-                ':profile_data': profile_data
+                ':profile_data': profile_data,
+                ':complete': True
             },
             ReturnValues="UPDATED_NEW"
         )

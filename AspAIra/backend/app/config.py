@@ -15,16 +15,17 @@ AGENT_CONFIGS = {
         "api_key": "app-xhtxiGphTme4kHhq1U9vXj2t",  # Local Dify API key
         "base_url": "http://localhost",  # Updated to use HTTP for local development
         "model": "gpt-4o",
-        "required_inputs": [
-            "number_of_dependents",
-            "bank_account",
-            "debt_information",
-            "remittance_information",
-            "remittance_amount",
-            "housing", 
-            "job_title",
-            "education_level"
-        ]
+        "required_inputs": {
+            "number_of_kids": {"source": "profile1", "type": "string"},
+            "bank_account": {"source": "profile2", "type": "string"},
+            "debt_information": {"source": "profile2", "type": "string"},
+            "remittance_information": {"source": "profile2", "type": "string"},
+            "remittance_amount": {"source": "profile2", "type": "string"},
+            "housing": {"source": "profile1", "type": "string"},
+            "job_title": {"source": "profile1", "type": "string"},
+            "education_level": {"source": "profile1", "type": "string"},
+            "financial_dependents": {"source": "profile2", "type": "string"}
+        }
     }
 }
 

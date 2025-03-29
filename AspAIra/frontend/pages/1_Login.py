@@ -191,14 +191,17 @@ def create_account(username: str, password: str):
         )
         print(f"Create account response status: {response.status_code}")  # Debug log
         print(f"Create account response body: {response.text}")  # Debug log
+        
         if response.status_code == 200:
             return True
         else:
             error_message = response.json().get("message", "Unknown error")
             print(f"Account creation failed: {error_message}")  # Debug log
+            st.error(error_message)
             return False
     except requests.RequestException as e:
         print(f"Create account request error: {str(e)}")  # Debug log
+        st.error("Failed to connect to server. Please try again.")
         return False
 
 def check_profile_status(token: str):
@@ -251,22 +254,10 @@ with col2:
         if not username or not password:
             st.error("Please enter both username and password")
         else:
-            if create_account(username, password):
-                st.success("Account created successfully!")
-                # Log in the user automatically
-                success = login(username, password)
-                if success:
-                    st.session_state.access_token = success["access_token"]
-                    st.switch_page("pages/2_Profile1.py")
-                else:
-                    st.error("Account created but login failed. Please try logging in manually.")
-            else:
-                response = requests.post(
-                    "http://localhost:8001/signup",
-                    json={"username": username, "password": password}
-                )
-                error_message = response.json().get("message", "Unknown error")
-                st.error(f"Failed to create account: {error_message}")
+            success = create_account(username, password)
+            if success:
+                st.success("Account created successfully! Please complete your profile.")
+                st.switch_page("pages/2_Profile1.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True) 

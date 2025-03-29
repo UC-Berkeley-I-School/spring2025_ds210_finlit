@@ -180,16 +180,22 @@ with st.form("profile2_form"):
     )
     
     remittance_information = st.selectbox(
-        "How do you send money?",
+        "How do you send money home?",
         ["", "Send money with Bank Transfer", "Send money with Exchange House", 
          "Send money offline", "Don't Send any money"],
         key="remittance_information"
     )
     
     remittance_amount = st.selectbox(
-        "How much do you send monthly?",
+        "How much do you send home monthly?",
         ["", "Less than 100 AED", "100-500 AED", "500-1000 AED", "1000-2000 AED", "More than 2000 AED"],
         key="remittance_amount"
+    )
+
+    financial_dependents = st.selectbox(
+        "Who do you financially support back home?",
+        ["", "None", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"],
+        key="financial_dependents"
     )
     
     # Submit button with proper title and no ARIA attributes
@@ -203,14 +209,15 @@ with st.form("profile2_form"):
 # Handle form submission
 if submit_button:
     # Check if any field is empty
-    if "" in [bank_account, debt_information, remittance_information, remittance_amount]:
+    if "" in [bank_account, debt_information, remittance_information, remittance_amount, financial_dependents]:
         st.error("Please fill all fields")
     else:
         profile_data = {
             "bank_account": bank_account,
             "debt_information": debt_information,
             "remittance_information": remittance_information,
-            "remittance_amount": remittance_amount
+            "remittance_amount": remittance_amount,
+            "financial_dependents": financial_dependents
         }
         
         if update_profile_part2(profile_data):

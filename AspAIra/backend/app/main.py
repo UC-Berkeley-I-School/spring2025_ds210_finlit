@@ -15,6 +15,7 @@ import requests
 from sseclient import SSEClient
 from datetime import datetime
 from fastapi import Request
+from .database import UserExistsError
 
 app = FastAPI(**API_CONFIG)
 
@@ -73,6 +74,12 @@ async def create_user(user: models.UserCreate):
         database.create_user(user.username, user.password)
         print(f"User created successfully: {user.username}")  # Debug log
         return {"message": "User created successfully"}
+    except UserExistsError as e:
+        print(f"User already exists: {str(e)}")  # Debug log
+        return JSONResponse(
+            status_code=409,
+            content={"message": str(e)}
+        )
     except Exception as e:
         print(f"Error in create_user: {str(e)}")  # Debug log
         return JSONResponse(
