@@ -223,6 +223,7 @@ def _create_tables_if_not_exists():
                     print(f"Table {CHATS_TABLE} already exists")
                 else:
                     raise
+
     except Exception as e:
         print(f"Warning: Error creating tables: {str(e)}")
         print("Using in-memory storage for development")
