@@ -13,6 +13,7 @@ from .config import DATABASE_CONFIG
 import uuid
 import json
 from decimal import Decimal
+from fastapi import Request
 
 # JWT Configuration
 SECRET_KEY = "development_secret_key"  # Change in production
@@ -79,8 +80,8 @@ except Exception as e:
 
 # Table names
 USERS_TABLE = 'AspAIra_Users'
-CONVERSATIONS_TABLE = 'AspAIra_Conversations'
 CHATS_TABLE = 'AspAIra_Chats'
+EVALUATIONS_TABLE = 'AspAIra_ConversationEvaluations'
 
 def _create_tables_if_not_exists():
     try:
@@ -115,40 +116,6 @@ def _create_tables_if_not_exists():
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ResourceInUseException':
                     print(f"Table {USERS_TABLE} already exists")
-                else:
-                    raise
-
-        # Create Conversations table
-        try:
-            dynamodb.Table(CONVERSATIONS_TABLE).table_status
-            print(f"Table {CONVERSATIONS_TABLE} exists")
-        except (ClientError, AttributeError):
-            print(f"Creating table {CONVERSATIONS_TABLE}")
-            try:
-                table = dynamodb.create_table(
-                    TableName=CONVERSATIONS_TABLE,
-                    KeySchema=[
-                        {
-                            'AttributeName': 'conversation_id',
-                            'KeyType': 'HASH'
-                        }
-                    ],
-                    AttributeDefinitions=[
-                        {
-                            'AttributeName': 'conversation_id',
-                            'AttributeType': 'S'
-                        }
-                    ],
-                    ProvisionedThroughput={
-                        'ReadCapacityUnits': 5,
-                        'WriteCapacityUnits': 5
-                    }
-                )
-                table.wait_until_exists()
-                print(f"Table {CONVERSATIONS_TABLE} created successfully")
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'ResourceInUseException':
-                    print(f"Table {CONVERSATIONS_TABLE} already exists")
                 else:
                     raise
 
@@ -223,9 +190,52 @@ def _create_tables_if_not_exists():
                     print(f"Table {CHATS_TABLE} already exists")
                 else:
                     raise
+
+        # Create Evaluations table
+        try:
+            dynamodb.Table(EVALUATIONS_TABLE).table_status
+            print(f"Table {EVALUATIONS_TABLE} exists")
+        except (ClientError, AttributeError):
+            print(f"Creating table {EVALUATIONS_TABLE}")
+            try:
+                table = dynamodb.create_table(
+                    TableName=EVALUATIONS_TABLE,
+                    KeySchema=[
+                        {
+                            'AttributeName': 'conversation_id',
+                            'KeyType': 'HASH'
+                        },
+                        {
+                            'AttributeName': 'evaluation_timestamp',
+                            'KeyType': 'RANGE'
+                        }
+                    ],
+                    AttributeDefinitions=[
+                        {
+                            'AttributeName': 'conversation_id',
+                            'AttributeType': 'S'
+                        },
+                        {
+                            'AttributeName': 'evaluation_timestamp',
+                            'AttributeType': 'S'
+                        }
+                    ],
+                    ProvisionedThroughput={
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                )
+                table.wait_until_exists()
+                print(f"Table {EVALUATIONS_TABLE} created successfully")
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceInUseException':
+                    print(f"Table {EVALUATIONS_TABLE} already exists")
+                else:
+                    raise
+
     except Exception as e:
-        print(f"Warning: Error creating tables: {str(e)}")
-        print("Using in-memory storage for development")
+        print(f"Error creating tables: {str(e)}")
+        raise
 
 # Create tables on module import
 _create_tables_if_not_exists()
@@ -394,58 +404,6 @@ def scan_all_users():
         return response.get('Items', [])
     except Exception as e:
         print(f"Error scanning users: {str(e)}")
-        return []
-
-def create_conversation(username: str, agent_id: str) -> str:
-    """Create a new conversation"""
-    try:
-        table = dynamodb.Table(CONVERSATIONS_TABLE)
-        conversation_id = str(uuid.uuid4())  # Generate UUID for conversation_id
-        
-        conversation = {
-            "conversation_id": conversation_id,
-            "username": username,
-            "agent_id": agent_id,
-            "created_at": datetime.utcnow().isoformat(),
-            "last_activity": datetime.utcnow().isoformat(),
-            "metadata": {
-                "total_messages": 0,
-                "last_message": None,
-                "status": "active"
-            }
-        }
-        
-        table.put_item(Item=conversation)
-        return conversation_id
-    except Exception as e:
-        print(f"Error creating conversation: {str(e)}")
-        raise
-
-def get_conversation(conversation_id: str) -> Optional[Dict]:
-    """Get conversation by ID"""
-    try:
-        table = dynamodb.Table(CONVERSATIONS_TABLE)
-        response = table.get_item(
-            Key={'conversation_id': conversation_id}
-        )
-        return response.get('Item')
-    except Exception as e:
-        print(f"Error getting conversation: {str(e)}")
-        return None
-
-def get_user_conversations(username: str):
-    """Get all conversations for a user"""
-    try:
-        table = dynamodb.Table(CONVERSATIONS_TABLE)
-        response = table.scan(
-            FilterExpression='username = :username',
-            ExpressionAttributeValues={
-                ':username': username
-            }
-        )
-        return response.get('Items', [])
-    except Exception as e:
-        print(f"Error getting user conversations: {str(e)}")
         return []
 
 def save_chat_message(
@@ -677,5 +635,24 @@ def update_conversation_id(username: str, dify_conversation_id: str) -> bool:
     except Exception as e:
         print(f"Error updating conversation ID: {str(e)}")
         return False
+
+def verify_token(request: Request) -> Optional[str]:
+    """Verify JWT token from request header"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return None
+            
+        # Get token part after 'Bearer '
+        token = auth_header.split(' ', 1)[1] if ' ' in auth_header else auth_header
+        
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            return payload.get('username')
+        except jwt.InvalidTokenError:
+            return None
+    except Exception as e:
+        print(f"Error verifying token: {str(e)}")
+        return None
 
 # End of file - removing reset_database function 

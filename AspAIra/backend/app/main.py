@@ -318,26 +318,6 @@ async def get_chat_history(
             detail=str(e)
         )
 
-@app.get("/api/chat/conversations")
-async def get_conversations(
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all conversations for the current user"""
-    try:
-        # Get conversations from database
-        conversations = database.get_conversations(
-            username=current_user["username"]
-        )
-        
-        return {"conversations": conversations}
-        
-    except Exception as e:
-        print(f"Error getting conversations: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-
 @app.get("/user/profile")
 async def get_user_profile(current_user: dict = Depends(get_current_user)):
     """Get complete user profile data"""
@@ -364,7 +344,17 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
 async def verify_token(request: Request):
     """Verify JWT token and return user data"""
     try:
-        current_user = await get_current_user(request)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "No authorization header"}
+            )
+            
+        # Get token part after 'Bearer '
+        token = auth_header.split(' ', 1)[1] if ' ' in auth_header else auth_header
+        
+        current_user = await get_current_user(token)
         return {"username": current_user["username"]}
     except Exception as e:
         print(f"Backend: Error verifying token - {str(e)}")

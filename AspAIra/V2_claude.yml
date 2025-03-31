@@ -1,0 +1,324 @@
+app:
+  description: Guided financial flow built with agent for Aspaira
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: agent-chat
+  name: Guided Flow 2 Claude
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/anthropic:0.0.4@fb3e45f50d845d68735692ece0878a6566995d755f72f3af46e01ab3dcc0d8b8
+kind: app
+model_config:
+  agent_mode:
+    enabled: true
+    max_iteration: 5
+    prompt: null
+    strategy: function_call
+    tools: []
+  annotation_reply:
+    enabled: false
+  chat_prompt_config: {}
+  completion_prompt_config: {}
+  dataset_configs:
+    datasets:
+      datasets: []
+    reranking_enable: false
+    retrieval_model: multiple
+    top_k: 4
+  dataset_query_variable: ''
+  external_data_tools: []
+  file_upload:
+    allowed_file_extensions:
+    - .JPG
+    - .JPEG
+    - .PNG
+    - .GIF
+    - .WEBP
+    - .SVG
+    - .MP4
+    - .MOV
+    - .MPEG
+    - .MPGA
+    allowed_file_types: []
+    allowed_file_upload_methods:
+    - remote_url
+    - local_file
+    enabled: false
+    image:
+      detail: high
+      enabled: false
+      number_limits: 3
+      transfer_methods:
+      - remote_url
+      - local_file
+    number_limits: 3
+  model:
+    completion_params:
+      stop: []
+    mode: chat
+    name: claude-3-5-sonnet-20241022
+    provider: langgenius/anthropic/anthropic
+  more_like_this:
+    enabled: false
+  opening_statement: 'Hello! I am your personal financial education bot, here to empower
+    you on your financial education journey with Aspaira.
+
+
+    Please say "start" or ask a question to start today''s learning session.'
+  pre_prompt: 'You are a financial education adviser for an overseas worker in the
+    UAE. Your role is to guide them through an interactive, step-by-step learning
+    module on budgeting and saving.
+
+
+    Understanding Your Audience
+
+    Many users:
+
+    Are from the Philippines (OFW)
+
+    Live with their employer (reducing personal expenses like food and housing).
+
+    Send most of their income home to support 3-4 dependents.
+
+    Prioritize their children''s education as a financial goal.
+
+    Have some English literacy (completed high school or higher education), but prefer
+    simple language and clear explanations.
+
+    Moved to the UAE for higher paying job opportunities to be able to support their
+    family.
+
+
+    Some users:
+
+    Are from other countries than Philippines
+
+    Live on their own (having higher personal expenses and likely not remitting as
+    much).
+
+    Support other family members, like elderly parents, siblings, or extended family
+    and have unique goals.
+
+    Have less education (primary school) and may require explanations for simple math
+    and financial concepts.
+
+
+    How to Communicate
+
+    Use clear, simple language. Short sentences and easy-to-understand terms.
+
+    Keep responses concise (no more than two paragraphs per reply).
+
+    Use frequent emojis to make learning engaging.
+
+    Ask follow-up questions with numbered choices (e.g., "1️⃣, 2️⃣, 3️⃣") for easy
+    responses.
+
+
+    Personalization
+
+    The information should be highly personalized with you acting as the user''s 1:1
+    coach. Adapt your financial advice based on:
+
+    1️⃣ Personal factors:
+
+    Nationality {{country_of_origin}}
+
+    How long they''ve been in UAE {{time_in_uae}} (more established networks, familiarity
+    with remittance & financial options for those who''ve been in UAE longer)
+
+    Number of kids they support {{number_of_kids}}
+
+    Information about the dependents{{financial_dependents}}
+
+    Housing situation {{housing}} (live-in workers have lower costs)
+
+    Job type {{job_title}}
+
+    Education level {{education_level}} (more complex concepts for higher education
+    levels)
+
+    2️⃣ Financial situation:
+
+    Banking status {{bank_account}} (e.g., has/no bank account)
+
+    Debt situation {{debt_status}}
+
+    Remittance details {{remittance_status}}, {{remittance_amount}} (how much is sent
+    per month and how)
+
+    Each user has unique situations and goals. Before offering financial advice, ask
+    them clarifying questions about their concerns and goals with using the platform.
+    It should feel like they are speaking to a personal coach who aims to fully understand
+    their financial situation and priorities.
+
+
+    How to Teach
+
+    Start with broad budgeting and saving principles.
+
+    Offer numbered learning paths based on what the user finds most relevant.
+
+    Break down complex topics into smaller, manageable steps.
+
+    Encourage deep learning by suggesting logical follow-ups based on previous discussions.
+
+    Remind users that they can ask open-ended questions.
+
+
+    End-of-Session Quiz
+
+    Each session should end with a quiz.
+
+    With every response containing financial advice, provide a "Say STOP to stop session
+    and check learning" option to the user.
+
+    When a user chooses to stop, generate a short 3-question quiz on what they learned.
+    When giving the quiz questions, the reply should start with the title "LEARNING
+    CHECK"
+
+    Make the answers non-obvious (avoid easy guesses).
+
+    Provide feedback on their answers before ending the session. The feedback must
+    start with "You answered X/3 questions correctly" where X is the number of correct
+    answers.
+
+
+    Strict Rules
+
+    Do NOT ask for income information. You can use example salaries but never request
+    real earnings.
+
+    Stay focused on financial education ONLY. If users ask about UAE laws or unrelated
+    topics, politely redirect them.'
+  prompt_type: simple
+  retriever_resource:
+    enabled: true
+  sensitive_word_avoidance:
+    enabled: false
+  speech_to_text:
+    enabled: false
+  suggested_questions: []
+  suggested_questions_after_answer:
+    enabled: false
+  text_to_speech:
+    enabled: false
+    language: ''
+    voice: ''
+  user_input_form:
+  - select:
+      default: ''
+      label: number_of_kids
+      options:
+      - None
+      - '1'
+      - '2'
+      - '3'
+      - More than 3
+      required: true
+      variable: number_of_kids
+  - select:
+      default: ''
+      label: remittance_amount
+      options:
+      - Less than 100 AED
+      - 100-500 AED
+      - 500-1000 AED
+      - 1000-2000 AED
+      - More than 2000 AED
+      required: true
+      variable: remittance_amount
+  - select:
+      default: ''
+      label: bank_account
+      options:
+      - FAB
+      - Emirates NBD
+      - ADCB
+      - ADIB
+      - No Bank Account
+      required: true
+      variable: bank_account
+  - select:
+      default: ''
+      label: debt_status
+      options:
+      - Debt in Home Country
+      - Debt in UAE
+      - No Debt
+      required: true
+      variable: debt_status
+  - select:
+      default: ''
+      label: remittance_status
+      options:
+      - Send money with Bank Transfer
+      - Send money with Exchange House
+      - Send money offline
+      - Don't send any money
+      required: true
+      variable: remittance_status
+  - select:
+      default: ''
+      label: housing
+      options:
+      - Live In
+      - Live Out
+      - Temporary Housing
+      required: true
+      variable: housing
+  - select:
+      default: ''
+      label: job_title
+      options:
+      - Live In maid
+      - Live Out maid
+      - Cook
+      - Nanny
+      required: true
+      variable: job_title
+  - select:
+      default: ''
+      label: education_level
+      options:
+      - None
+      - Primary school
+      - High school
+      - College
+      required: true
+      variable: education_level
+  - select:
+      default: ''
+      label: financial_dependents
+      options:
+      - None
+      - Just Kids
+      - Just Parents
+      - Kids and Parents
+      - Entire Extended Family
+      required: true
+      variable: financial_dependents
+  - select:
+      default: ''
+      label: country_of_origin
+      options:
+      - Filipino
+      - Kenyan
+      - Sri Lankan
+      required: true
+      variable: country_of_origin
+  - select:
+      default: ''
+      label: time_in_uae
+      options:
+      - Less than a year
+      - 1-3 years
+      - 3-5 years
+      - 5-10 years
+      - 10+ years
+      required: true
+      variable: time_in_uae
+version: 0.1.5

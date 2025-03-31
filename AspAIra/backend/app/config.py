@@ -11,8 +11,8 @@ from typing import Dict
 
 # Agent configurations
 AGENT_CONFIGS = {
-    "v1": {
-        "api_key": "app-xhtxiGphTme4kHhq1U9vXj2t",  # Local Dify API key
+    "Baseline_gpt": {
+        "api_key": "app-vYXuXAEZCGcjMq7hGc1uzaEh",  # Local Dify API key
         "base_url": "http://localhost",  # Updated to use HTTP for local development
         "model": "gpt-4o",
         "required_inputs": {
@@ -26,11 +26,45 @@ AGENT_CONFIGS = {
             "education_level": {"source": "profile1", "type": "string"},
             "financial_dependents": {"source": "profile2", "type": "string"}
         }
+    },
+    "Baseline_claude": {
+        "api_key": "app-5UVXvE1G6wiZBZ3v0MACCfbj",  # Local Dify API key
+        "base_url": "http://localhost",  # Updated to use HTTP for local development
+        "model": "clause-3-5-sonnet-20241022",
+        "required_inputs": {
+            "number_of_kids": {"source": "profile1", "type": "string"},
+            "bank_account": {"source": "profile2", "type": "string"},
+            "debt_information": {"source": "profile2", "type": "string"},
+            "remittance_information": {"source": "profile2", "type": "string"},
+            "remittance_amount": {"source": "profile2", "type": "string"},
+            "housing": {"source": "profile1", "type": "string"},
+            "job_title": {"source": "profile1", "type": "string"},
+            "education_level": {"source": "profile1", "type": "string"},
+            "financial_dependents": {"source": "profile2", "type": "string"}
+        }
+    },
+    "V2_claude": {
+        "api_key": "app-N1mfbmN31JwFFOfEhOnvGjg3",  # Local Dify API key
+        "base_url": "http://localhost",  # Updated to use HTTP for local development
+        "model": "clause-3-5-sonnet-20241022",
+        "required_inputs": {
+            "number_of_kids": {"source": "profile1", "type": "string"},
+            "bank_account": {"source": "profile2", "type": "string"},
+            "debt_information": {"source": "profile2", "type": "string"},
+            "remittance_information": {"source": "profile2", "type": "string"},
+            "remittance_amount": {"source": "profile2", "type": "string"},
+            "housing": {"source": "profile1", "type": "string"},
+            "job_title": {"source": "profile1", "type": "string"},
+            "education_level": {"source": "profile1", "type": "string"},
+            "financial_dependents": {"source": "profile2", "type": "string"},
+            "country_of_origin": {"source": "profile1", "type": "string"},
+            "time_in_uae": {"source": "profile1", "type": "string"}
+        }
     }
 }
 
 # Active agent version
-ACTIVE_AGENT_VERSION = "v1"
+ACTIVE_AGENT_VERSION = "V2_claude"
 
 # Database configuration
 DATABASE_CONFIG = {

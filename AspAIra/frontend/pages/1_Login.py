@@ -256,8 +256,23 @@ with col2:
         else:
             success = create_account(username, password)
             if success:
-                st.success("Account created successfully! Please complete your profile.")
-                st.switch_page("pages/2_Profile1.py")
+                # Automatically log in after successful account creation
+                login_success = login(username, password)
+                if login_success:
+                    st.session_state.access_token = login_success["access_token"]
+                    # Check profile status after successful login
+                    profile_status = check_profile_status(login_success["access_token"])
+                    print(f"Profile status: {profile_status}")  # Debug log
+                    if profile_status["profile1_complete"] and profile_status["profile2_complete"]:
+                        st.success("Account created and logged in successfully!")
+                        st.switch_page("pages/3_Coach_Landing.py")
+                    else:
+                        st.success("Account created successfully! Please complete your profile.")
+                        st.switch_page("pages/2_Profile1.py")
+                else:
+                    st.error("Account created but login failed. Please try logging in manually.")
+            else:
+                st.error("Failed to create account. Please try again.")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True) 
