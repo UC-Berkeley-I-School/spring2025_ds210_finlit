@@ -29,11 +29,21 @@ st.markdown("""
     footer {visibility: hidden !important;}
     [data-testid="collapsedControl"] {display: none !important;}
     section[data-testid="stSidebar"] {display: none !important;}
+    header[data-testid="stHeader"] {display: none !important;}
+    div[data-testid="stToolbar"] {display: none !important;}
+    div[data-testid="stDecoration"] {display: none !important;}
     
     /* Center title */
     .title-container {
         text-align: center;
-        padding: 1rem 0;
+        padding: 0.5rem 0;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     /* Main content container */
@@ -42,12 +52,14 @@ st.markdown("""
         margin: 0 auto;
         padding: 1rem;
         text-align: center;
+        padding-top: 60px;
     }
     
     /* Image styling */
     .hero-image {
-        max-width: 100%;
-        height: auto;
+        max-width: 85%;
+        height: 300px;
+        object-fit: cover;
         margin: 1rem auto;
         border-radius: 10px;
         display: block;
@@ -64,7 +76,7 @@ st.markdown("""
         border-radius: 8px !important;
         transition: background-color 0.2s ease !important;
         width: 200px !important;
-        margin: 0 auto !important;
+        margin: 2rem auto !important;
         display: block !important;
     }
     
@@ -78,8 +90,8 @@ st.markdown("""
     
     /* Description text */
     .description {
-        font-size: 1.1rem;
-        line-height: 1.6;
+        font-size: 1rem;
+        line-height: 1.5;
         color: #333;
         margin: 1rem auto;
         max-width: 600px;
@@ -91,6 +103,7 @@ st.markdown("""
     @media screen and (max-width: 768px) {
         .main-container {
             padding: 0.5rem;
+            padding-top: 50px;
         }
         
         .title-container {
@@ -98,13 +111,13 @@ st.markdown("""
         }
         
         .hero-image {
-            max-width: 80%;
-            height: auto;
+            max-width: 95%;
+            height: 250px;
             margin: 0.5rem auto;
         }
         
         .description {
-            font-size: 1rem;
+            font-size: 0.9rem;
             padding: 0 0.5rem;
             margin: 0.5rem auto;
         }
@@ -117,6 +130,10 @@ st.markdown("""
         h2 {
             font-size: 1.5rem !important;
             margin: 0.5rem 0 !important;
+        }
+
+        .stButton > button {
+            margin: 1.5rem auto !important;
         }
     }
 </style>
@@ -140,12 +157,10 @@ st.markdown('<h2 style="text-align: center;">Here to Empower You!</h2>', unsafe_
 
 # Description
 st.markdown("""
-<div style="text-align: center; max-width: 600px; margin: 2rem auto;">
-    <p style="font-size: 1.1rem; line-height: 1.6; color: #333; margin: 0;">
-        Our AI-powered financial literacy platform is designed specifically for you. 
-        We provide personalized guidance to help you manage your finances, set savings goals, and make informed financial decisions. 
-        Join us on your journey to financial independence!
-    </p>
+<div class="description">
+    Our AI-powered financial literacy platform is designed specifically for you. 
+    We provide personalized guidance to help you manage your finances, set savings goals, and make informed financial decisions. 
+    Join us on your journey to financial independence!
 </div>
 """, unsafe_allow_html=True)
 

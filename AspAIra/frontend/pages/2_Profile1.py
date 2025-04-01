@@ -166,11 +166,11 @@ st.markdown('<div class="form-container">', unsafe_allow_html=True)
 
 # Form fields
 with st.form("profile1_form"):
-    country_of_origin = st.selectbox("Country of Origin", ["", "Filipino", "Kenyan", "Sri Lankan"])
-    time_in_uae = st.selectbox("How long have you been in UAE", ["", "Less than a year", "1-3 years", "3-5 years", "5-10 years", "10+ years"])
-    job_title = st.selectbox("Job Title", ["", "Live In maid", "Live out maid", "Cook", "Nanny"])
+    country_of_origin = st.selectbox("Country of Origin", ["", "Philippines", "India", "Bangladesh", "Nepal", "Ethiopia", "Kenya", "Uganda","Sri Lanka","Other"])
+    time_in_uae = st.selectbox("How Long Have You Been in UAE", ["", "Less than a year", "1-3 years", "3-5 years", "5-10 years", "10+ years"])
+    job_title = st.selectbox("Job Title", ["", "Live In maid", "Live Out maid", "Cook", "Nanny"])
     housing = st.selectbox("Housing", ["", "Live In", "Live Out", "Temporary Housing"])
-    education_level = st.selectbox("Education Level", ["", "None", "Primary school", "High school", "College"])
+    education_level = st.selectbox("Education Level", ["", "None", "Primary School", "High School", "College"])
     number_of_kids = st.selectbox("Number of Kids", ["", "None", "1", "2", "3", "More than 3"])
 
     # Update button to match Profile2 style

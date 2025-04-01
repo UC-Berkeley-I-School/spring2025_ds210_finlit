@@ -157,44 +157,50 @@ def update_profile_part2(profile_data: dict):
 # Main container
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
-# Title
-st.markdown('<div class="title-container"><h1>🌱 AspAIra</h1></div>', unsafe_allow_html=True)
+# Title with centered styling
+st.markdown("""
+<div class="title-container" style="text-align: center; width: 100%; margin-bottom: 2rem;">
+    <h1 style="margin: 0; padding: 0;">🌱 AspAIra</h1>
+</div>
+""", unsafe_allow_html=True)
+
+# Progress bar and text
+st.progress(1.0)
+st.markdown('<p class="progress-text">Step 2 of 2: Financial Information Intake</p>', unsafe_allow_html=True)
 
 # Form container with grey background
 st.markdown('<div class="form-container">', unsafe_allow_html=True)
 
 # Create form with select boxes
 with st.form("profile2_form"):
-    st.markdown("### Financial Information")
-    
     bank_account = st.selectbox(
-        "Which bank do you use?",
-        ["", "FAB", "Emirates NBD", "ADCB", "ADIB", "No Bank Account"],
+        "Which Bank Do You Use?",
+        ["", "FAB", "Emirates NBD", "ADCB", "Mashreq Bank", "RAKBANK", "Dubai Islamic Bank", "Sharjah Islamic Bank", "Emirates Islamic Bank", "CBD", "No Bank Account"],
         key="bank_account"
     )
     
     debt_information = st.selectbox(
-        "Do you have any debt?",
+        "Do You Have Any Debt?",
         ["", "Debt in Home Country", "Debt in UAE", "No Debt"],
         key="debt_information"
     )
     
     remittance_information = st.selectbox(
-        "How do you send money home?",
+        "How Do You Send Money Home?",
         ["", "Send money with Bank Transfer", "Send money with Exchange House", 
          "Send money offline", "Don't Send any money"],
         key="remittance_information"
     )
     
     remittance_amount = st.selectbox(
-        "How much do you send home monthly?",
+        "How Much Do You Send Home Monthly?",
         ["", "Less than 100 AED", "100-500 AED", "500-1000 AED", "1000-2000 AED", "More than 2000 AED"],
         key="remittance_amount"
     )
 
     financial_dependents = st.selectbox(
-        "Who do you financially support back home?",
-        ["", "None", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"],
+        "Who Do You Financially Support Back Home?",
+        ["", "No One", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"],
         key="financial_dependents"
     )
     

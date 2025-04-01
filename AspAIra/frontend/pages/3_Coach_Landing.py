@@ -16,6 +16,10 @@ if 'conversation_id' not in st.session_state:
     st.session_state.conversation_id = None
 if 'is_loading' not in st.session_state:
     st.session_state.is_loading = False
+if 'waiting_for_navigation' not in st.session_state:
+    st.session_state.waiting_for_navigation = False
+if 'last_username' not in st.session_state:
+    st.session_state.last_username = None
 
 # Get username from token if not set
 if st.session_state.access_token and not st.session_state.username:
@@ -31,6 +35,15 @@ if st.session_state.access_token and not st.session_state.username:
     except Exception as e:
         print(f"Frontend: Error initializing user session - {str(e)}")
         st.error("Error initializing user session")
+
+# Check if username has changed (new user logged in)
+if st.session_state.username and st.session_state.username != st.session_state.last_username:
+    print(f"Frontend: New user logged in - {st.session_state.username}")
+    # Clear chat-related states for new user
+    st.session_state.chat_history = []
+    st.session_state.conversation_id = None
+    st.session_state.waiting_for_navigation = False
+    st.session_state.last_username = st.session_state.username
 
 # Page configuration
 st.set_page_config(
@@ -53,6 +66,41 @@ st.markdown("""
     section[data-testid="stSidebar"] {display: none !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
+    header[data-testid="stHeader"] {display: none !important;}
+    
+    /* Fixed header section */
+    .header-section {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 1.5rem;
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 100%;
+        height: auto;
+    }
+    
+    /* Add padding to main content to prevent overlap with fixed header */
+    .main .block-container {
+        padding-top: 180px !important;
+    }
+    
+    /* Chat container specific padding and positioning */
+    .stChat {
+        margin-top: 20px !important;
+        padding-top: 20px !important;
+        position: relative !important;
+        z-index: 1 !important;
+    }
+
+    /* Ensure chat messages container is properly positioned */
+    .stChatMessageContainer {
+        margin-top: 20px !important;
+        position: relative !important;
+        z-index: 1 !important;
+    }
     
     /* Message bubbles */
     .user-message {
@@ -90,6 +138,14 @@ st.markdown("""
     .message-container {
         clear: both;
     }
+
+    /* Help text container */
+    .help-text-container {
+        color: #666;
+        font-size: 0.9em;
+        margin: 0;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -99,57 +155,78 @@ def get_initial_message():
         print(f"Frontend: Starting initial message request for user {st.session_state.username}")
         st.session_state.is_loading = True
         
-        # Show thinking indicator
-        with st.spinner("Thinking..."):
-            # Send request with streaming
-            with requests.post(
-                "http://localhost:8001/api/chat",
-                headers={"Authorization": f"Bearer {st.session_state.access_token}"},
-                json={
-                    "message": "Please start a new conversation and provide the opening statement so we can get started",
-                    "username": st.session_state.username
-                },
-                stream=True
-            ) as response:
-                if response.status_code == 200:
-                    print("Frontend: Received successful response from backend")
-                    for line in response.iter_lines():
-                        if line:
-                            line = line.decode('utf-8')
-                            if line.startswith('data: '):
-                                data = line[6:]  # Remove 'data: ' prefix
-                                if data == '[DONE]':
-                                    print("Frontend: Received completion signal")
-                                    break
-                                try:
-                                    response_data = json.loads(data)
-                                    print(f"Frontend: Received response data - {json.dumps(response_data, indent=2)}")
-                                    
-                                    # Update conversation ID
-                                    if response_data.get('conversation_id'):
-                                        st.session_state.conversation_id = response_data['conversation_id']
-                                        print(f"Frontend: Updated conversation_id - {response_data['conversation_id']}")
-                                    
-                                    # Add assistant message to chat history
-                                    if response_data.get('response'):
-                                        st.session_state.chat_history.append({
-                                            "role": "assistant",
-                                            "content": response_data['response']
-                                        })
-                                        print(f"Frontend: Added initial message to chat history")
-                                except json.JSONDecodeError:
-                                    print(f"Frontend: Error decoding JSON - {data}")
-                                    continue
-                else:
-                    error_data = response.json()
-                    print(f"Frontend: Received error response - {error_data}")
-                    st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
-                
+        # Send request with streaming
+        with requests.post(
+            "http://localhost:8001/api/chat",
+            headers={"Authorization": f"Bearer {st.session_state.access_token}"},
+            json={
+                "message": "Please start a new conversation and provide the opening statement so we can get started",
+                "username": st.session_state.username
+            },
+            stream=True
+        ) as response:
+            if response.status_code == 200:
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith('data: '):
+                            data = line[6:]  # Remove 'data: ' prefix
+                            if data == '[DONE]':
+                                break
+                            try:
+                                response_data = json.loads(data)
+                                
+                                # Update conversation ID first
+                                if response_data.get('conversation_id'):
+                                    st.session_state.conversation_id = response_data['conversation_id']
+                                
+                                # Then add message to chat history
+                                if response_data.get('response'):
+                                    st.session_state.chat_history.append({
+                                        "role": "assistant",
+                                        "content": response_data['response']
+                                    })
+                            except json.JSONDecodeError:
+                                continue
+            else:
+                error_data = response.json()
+                st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
+            
     except Exception as e:
         print(f"Frontend: Error getting initial message - {str(e)}")
         st.error(f"Error getting initial message: {str(e)}")
     finally:
         st.session_state.is_loading = False
+        st.rerun()
+
+# Show loading state while initializing
+if not st.session_state.chat_history and not st.session_state.is_loading:
+    with st.spinner("Loading Financial Coach Content..."):
+        st.empty()  # Placeholder for the spinner
+        get_initial_message()
+
+# Main page content
+st.markdown("""
+<div class="header-section">
+    <div style="margin-bottom: 0; text-align: center;">
+        <h1 style="margin: 0; padding: 0; font-size: 2.2em; line-height: 1.2;">🌱 AspAIra</h1>
+        <div class="help-text-container" style="margin-top: 0.25rem;">
+            In order to end a learning session or start a new one just input "STOP" and a final quiz will be provided
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+def start_fresh_conversation():
+    """Start a completely fresh conversation by clearing state and getting initial message"""
+    print("Frontend: Starting fresh conversation")
+    # Clear all relevant state
+    st.session_state.chat_history = []
+    st.session_state.conversation_id = None
+    st.session_state.waiting_for_navigation = False
+    
+    # Get initial message
+    get_initial_message()
 
 def send_message():
     """Send message to backend and update chat history"""
@@ -160,28 +237,36 @@ def send_message():
     message = st.session_state.user_input
     st.session_state.user_input = ""
     
-    print("\n=== Starting Message Send ===")
-    print(f"Frontend: Sending user message - {message}")
-    print(f"Frontend: Current conversation_id - {st.session_state.conversation_id}")
-    print(f"Frontend: Current chat history before update: {json.dumps(st.session_state.chat_history, indent=2)}")
-    print(f"Frontend: Current loading state - {st.session_state.is_loading}")
+    # Check if we're waiting for navigation input
+    if st.session_state.waiting_for_navigation:
+        # Convert input to lowercase for case-insensitive matching
+        message_lower = message.lower()
+        
+        # Handle navigation options
+        if message_lower in ["1", "start new topic"]:
+            # Start fresh conversation
+            start_fresh_conversation()
+        else:
+            # Clear all session state before redirecting
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.switch_page("Home.py")
+        return
+    
+    print(f"Frontend: Sending message - {message}")
     
     # Add user message to chat history immediately
     st.session_state.chat_history.append({
         "role": "user",
         "content": message
     })
-    print(f"Frontend: Added user message to chat history. New length: {len(st.session_state.chat_history)}")
-    print(f"Frontend: Updated chat history after user message: {json.dumps(st.session_state.chat_history, indent=2)}")
     
     try:
         st.session_state.is_loading = True
-        print("Frontend: Set loading state to True")
         
         # Show thinking indicator
         with st.spinner("Thinking..."):
             # Send request with streaming
-            print("Frontend: Sending request to backend...")
             with requests.post(
                 "http://localhost:8001/api/chat",
                 headers={"Authorization": f"Bearer {st.session_state.access_token}"},
@@ -192,72 +277,47 @@ def send_message():
                 },
                 stream=True
             ) as response:
-                print(f"Frontend: Response status code - {response.status_code}")
                 if response.status_code == 200:
-                    print("Frontend: Received successful response from backend")
                     for line in response.iter_lines():
                         if line:
                             line = line.decode('utf-8')
-                            print(f"Frontend: Raw line received - {line}")
                             if line.startswith('data: '):
                                 data = line[6:]  # Remove 'data: ' prefix
-                                print(f"Frontend: Processing data - {data}")
                                 if data == '[DONE]':
-                                    print("Frontend: Received completion signal")
                                     break
                                 try:
                                     response_data = json.loads(data)
-                                    print(f"Frontend: Parsed response data - {json.dumps(response_data, indent=2)}")
                                     
                                     # Update conversation ID
                                     if response_data.get('conversation_id'):
                                         st.session_state.conversation_id = response_data['conversation_id']
-                                        print(f"Frontend: Updated conversation_id - {response_data['conversation_id']}")
                                     
                                     # Add assistant message to chat history
                                     if response_data.get('response'):
-                                        print(f"Frontend: Adding assistant message to chat history")
-                                        print(f"Frontend: Current chat history before assistant message: {json.dumps(st.session_state.chat_history, indent=2)}")
                                         st.session_state.chat_history.append({
                                             "role": "assistant",
                                             "content": response_data['response']
                                         })
-                                        print(f"Frontend: Chat history length after update - {len(st.session_state.chat_history)}")
-                                        print(f"Frontend: Updated chat history: {json.dumps(st.session_state.chat_history, indent=2)}")
-                                        print("Frontend: Triggering Streamlit rerun")
+                                        
+                                        # Check for navigation prompt
+                                        if "Would you like to: 1️⃣ Start a new Topic 2️⃣ End The Session" in response_data['response']:
+                                            st.session_state.waiting_for_navigation = True
+                                        
                                         st.rerun()
-                                    else:
-                                        print("Frontend: No response field in data")
-                                except json.JSONDecodeError as e:
-                                    print(f"Frontend: Error decoding JSON - {str(e)}")
-                                    print(f"Frontend: Problematic data - {data}")
+                                except json.JSONDecodeError:
                                     continue
                 else:
                     error_data = response.json()
-                    print(f"Frontend: Received error response - {error_data}")
                     st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
                 
     except Exception as e:
         print(f"Frontend: Error sending message - {str(e)}")
-        print(f"Frontend: Error type - {type(e)}")
-        import traceback
-        print(f"Frontend: Traceback - {traceback.format_exc()}")
         st.error(f"Error sending message: {str(e)}")
     finally:
         st.session_state.is_loading = False
-        print(f"Frontend: Set loading state to False")
-        print(f"Frontend: Final chat history length - {len(st.session_state.chat_history)}")
-        print(f"Frontend: Final chat history content - {json.dumps(st.session_state.chat_history, indent=2)}")
-        print("=== Message Send Complete ===\n")
 
 def render_chat_interface():
     """Render the chat interface"""
-    print("\n=== Starting Chat Interface Render ===")
-    print(f"Frontend: Current chat history length: {len(st.session_state.chat_history)}")
-    print(f"Frontend: Current chat history content: {json.dumps(st.session_state.chat_history, indent=2)}")
-    print(f"Frontend: Is loading state: {st.session_state.is_loading}")
-    print(f"Frontend: Current conversation_id: {st.session_state.conversation_id}")
-    
     # Create a container for chat messages
     chat_container = st.container()
     
@@ -265,29 +325,19 @@ def render_chat_interface():
     with chat_container:
         # If chat history is empty and not loading, get initial message from agent
         if not st.session_state.chat_history and not st.session_state.is_loading:
-            print("Frontend: No chat history, getting initial message")
             get_initial_message()
         
         # Only display messages if we have them
         if st.session_state.chat_history:
-            print(f"Frontend: Displaying {len(st.session_state.chat_history)} messages")
             # Display all messages in chronological order using Streamlit's native chat components
-            for idx, message in enumerate(st.session_state.chat_history):
-                print(f"Frontend: Rendering message {idx + 1}: {message['role']}")
+            for message in st.session_state.chat_history:
                 with st.chat_message(message["role"]):
                     st.write(message["content"])
     
     # Chat input for free-form conversation
     if prompt := st.chat_input("Ask your question here..."):
-        print("\n=== User Input Received ===")
-        print(f"Frontend: User entered prompt: {prompt}")
         st.session_state.user_input = prompt
         send_message()
-    
-    print("=== Chat Interface Render Complete ===\n")
-
-# Main page content
-st.title("🌱 AspAIra Financial Coach")
 
 # Render chat interface
 render_chat_interface() 

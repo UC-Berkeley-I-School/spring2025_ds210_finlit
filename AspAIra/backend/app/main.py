@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from . import models, database
 from fastapi.responses import JSONResponse
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Tuple
 import uvicorn
 from .services.dify_service import DifyService
 from .config import API_CONFIG, ACTIVE_AGENT_VERSION, AGENT_CONFIGS
@@ -16,6 +16,119 @@ from sseclient import SSEClient
 from datetime import datetime
 from fastapi import Request
 from .database import UserExistsError
+import logging
+import uuid
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def detect_quiz_interaction(response: str) -> Tuple[str, Optional[Dict]]:
+    """
+    Detect quiz interactions and return interaction type and quiz data.
+    Returns (interaction_type, quiz_data)
+    """
+    logger.info(f"Detecting quiz interaction for response: {response[:200]}...")  # Log first 200 chars
+    
+    if "LEARNING CHECK 📝" in response:
+        logger.info("Detected quiz prompt pattern")
+        # Parse quiz questions
+        questions = []
+        lines = response.split('\n')
+        current_question = None
+        
+        for line in lines:
+            if line.startswith(('1.', '2.', '3.')):
+                if current_question:
+                    questions.append(current_question)
+                current_question = {
+                    "number": int(line[0]),
+                    "question": line[2:].strip(),
+                    "options": {}
+                }
+            elif line.strip().startswith(('a)', 'b)', 'c)')):
+                option_letter = line[0]
+                option_text = line[2:].strip()
+                current_question["options"][option_letter] = option_text
+                
+        if current_question:
+            questions.append(current_question)
+            
+        if len(questions) == 3:
+            logger.info("Detected quiz prompt")
+            return "quiz_prompt", {
+                "quiz_id": "",  # Empty for now
+                "questions": questions
+            }
+            
+    # New quiz result detection logic
+    logger.info("Checking for quiz result pattern...")
+    
+    # Clean and normalize the response
+    lines = [line.strip() for line in response.split('\n') if line.strip()]
+    
+    # Look for the score line pattern more flexibly
+    score_line = None
+    for line in lines:
+        if "You answered" in line and "/3 questions correctly!" in line:
+            score_line = line
+            break
+    
+    if score_line:
+        logger.info(f"Found score line: {score_line}")
+        try:
+            # Extract score more robustly
+            score_text = score_line.split("You answered")[1].split("/3")[0].strip()
+            score = int(score_text)
+            logger.info(f"Extracted score: {score}")
+            
+            # Look for answer feedback lines
+            user_answers = []
+            correct_answers = []
+            
+            for line in lines:
+                # Check for numbered feedback lines (e.g., "1. Incorrect -" or "2. Correct -")
+                if any(line.startswith(f"{i}.") for i in range(1, 4)) and ("Correct -" in line or "Incorrect -" in line):
+                    is_correct = "Correct -" in line
+                    logger.info(f"Found {'correct' if is_correct else 'incorrect'} answer line: {line}")
+                    
+                    # Extract user's answer and correct answer from the line
+                    # Format: "Correct/Incorrect - You answered X and the answer was Y - description"
+                    if "You answered" in line and "and the answer was" in line:
+                        # Extract user's answer
+                        user_answer = line.split("You answered")[1].split("and the answer was")[0].strip()
+                        # Extract correct answer
+                        correct_answer = line.split("and the answer was")[1].split("-")[0].strip()
+                        
+                        logger.info(f"Extracted user answer: {user_answer}")
+                        logger.info(f"Extracted correct answer: {correct_answer}")
+                        
+                        user_answers.append(user_answer)
+                        correct_answers.append(correct_answer)
+            
+            logger.info(f"Found {len(user_answers)} answers, {len(correct_answers)} correct")
+            
+            if len(user_answers) == 3:
+                logger.info("Detected complete quiz result")
+                return "quiz_result", {
+                    "quiz_id": "",  # Empty for now
+                    "user_answers": user_answers,
+                    "correct_answers": correct_answers,
+                    "score": score
+                }
+            else:
+                logger.warning(f"Expected 3 answers but found {len(user_answers)}")
+                
+        except Exception as e:
+            logger.error(f"Error processing quiz result: {str(e)}")
+            return "content", None
+            
+    elif "There was an issue processing your answers" in response:
+        logger.info("Detected invalid quiz answer format")
+        return "content", None
+        
+    logger.info("No quiz pattern detected, returning content type")
+    return "content", None
 
 app = FastAPI(**API_CONFIG)
 
@@ -161,7 +274,9 @@ async def chat(
                     'dify_metadata': {},
                     'usage_metrics': None,
                     'is_complete': False,
-                    'has_saved': False  # Track if we've saved the data
+                    'has_saved': False,
+                    'interaction_type': 'content',  # Default, will be updated by quiz detection
+                    'quiz_data': None  # Will store quiz data when detected
                 }
                 
                 print("\n=== Starting Event Collection ===")
@@ -174,7 +289,7 @@ async def chat(
                         username=current_user["username"],
                         message=chat_request.message,
                         profile_data=profile_data,
-                        conversation_id=chat_request.conversation_id  # Pass conversation_id directly
+                        conversation_id=chat_request.conversation_id
                     ):
                         try:
                             print("\n=== New Event Received ===")
@@ -192,14 +307,23 @@ async def chat(
                             
                             elif event.get('event') == 'agent_thought':
                                 print("\nProcessing agent_thought event...")
-                                # This is the main response content
-                                chat_data['response'] = event.get('data', {}).get('thought', '')
+                                # Get the response content
+                                response = event.get('data', {}).get('thought', '')
+                                chat_data['response'] = response
+                                
+                                # Detect quiz interaction
+                                interaction_type, quiz_data = detect_quiz_interaction(response)
+                                chat_data['interaction_type'] = interaction_type
+                                if quiz_data:
+                                    chat_data['quiz_data'] = quiz_data
+                                
                                 # Update metadata
                                 chat_data['dify_metadata'] = {
                                     "message_files": event.get('data', {}).get('message_files', []),
                                     "feedback": event.get('data', {}).get('feedback', None),
                                     "retriever_resources": event.get('data', {}).get('retriever_resources', []),
-                                    "agent_thoughts": event.get('data', {}).get('agent_thoughts', [])
+                                    "agent_thoughts": event.get('data', {}).get('agent_thoughts', []),
+                                    "quiz_data": quiz_data  # Add quiz data to metadata
                                 }
                                 print(f"Updated chat_data after agent_thought: {json.dumps(chat_data, indent=2)}")
                             
@@ -228,16 +352,23 @@ async def chat(
                                             timestamp=datetime.now(),
                                             message=chat_request.message,
                                             response=chat_data['response'],
-                                            interaction_type="chat",
+                                            interaction_type=chat_data['interaction_type'],
+                                            quiz_data=chat_data.get('quiz_data'),
                                             dify_metadata=chat_data['dify_metadata'],
                                             usage_metrics=chat_data['usage_metrics']
                                         )
                                         if success:
                                             chat_data['has_saved'] = True
                                             print("Successfully saved chat message")
-                                            # Send single simplified response after successful save
-                                            yield f"data: {json.dumps({'conversation_id': chat_data['conversation_id'], 'response': chat_data['response']})}\n\n"
-                                            yield "data: [DONE]\n\n"  # Signal completion
+                                            # Send single response with all data
+                                            response_data = {
+                                                'conversation_id': chat_data['conversation_id'], 
+                                                'response': chat_data['response'],
+                                                'interaction_type': chat_data['interaction_type'],
+                                                'quiz_data': chat_data.get('quiz_data')
+                                            }
+                                            yield f"data: {json.dumps(response_data)}\n\n"
+                                            yield "data: [DONE]\n\n"
                                         else:
                                             print("Failed to save chat message")
                                     except Exception as e:

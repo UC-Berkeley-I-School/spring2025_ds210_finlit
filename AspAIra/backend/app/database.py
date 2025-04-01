@@ -55,6 +55,12 @@ except Exception as e:
         
         def Table(self, name):
             return InMemoryTable(self.tables[name])
+            
+        def create_table(self, TableName, KeySchema, AttributeDefinitions, ProvisionedThroughput, GlobalSecondaryIndexes=None):
+            # For in-memory storage, we just need to ensure the table exists
+            if TableName not in self.tables:
+                self.tables[TableName] = {}
+            return InMemoryTable(self.tables[TableName])
     
     class InMemoryTable:
         def __init__(self, data):
@@ -75,6 +81,14 @@ except Exception as e:
         
         def update_item(self, **kwargs):
             return {'Attributes': kwargs.get('ExpressionAttributeValues', {})}
+            
+        def wait_until_exists(self):
+            # For in-memory storage, table exists immediately
+            pass
+            
+        @property
+        def table_status(self):
+            return 'ACTIVE'
     
     dynamodb = InMemoryDB()
 

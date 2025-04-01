@@ -21,7 +21,7 @@ load_dotenv()
 EVAL_AGENT_CONFIG = {
     "api_key": os.getenv("DIFY_API_KEY", "app-vrvVKNIRXX8W0E8mBmAj3m17"),
     "base_url": os.getenv("DIFY_BASE_URL", "http://localhost"),
-    "model": "gpt-4",
+    "model": "claude-3-opus-20240229",
     "agent_mode": "evaluation"
 }
 
@@ -134,7 +134,54 @@ class DifyEvaluationService:
                             except json.JSONDecodeError as e:
                                 print(f"Error parsing thought as JSON: {str(e)}")
                                 print(f"Thought content: {thought}")
-                                # Handle non-JSON response by creating default evaluation data
+                                
+                                # Try to extract JSON from the text
+                                try:
+                                    # Look for JSON-like structure in the text
+                                    start_idx = thought.find('{')
+                                    end_idx = thought.rfind('}') + 1
+                                    
+                                    if start_idx == -1:
+                                        print("No opening curly brace found in text")
+                                    if end_idx == 0:
+                                        print("No closing curly brace found in text")
+                                        
+                                    if start_idx != -1 and end_idx != 0:
+                                        json_str = thought[start_idx:end_idx]
+                                        print(f"Extracted JSON string: {json_str}")
+                                        
+                                        evaluation_data = json.loads(json_str)
+                                        
+                                        # Validate required fields
+                                        required_fields = [
+                                            "Personalization", "Language_Simplicity",
+                                            "Response_Length", "Content_Relevance",
+                                            "Content_Difficulty"
+                                        ]
+                                        missing_fields = [field for field in required_fields if field not in evaluation_data]
+                                        
+                                        if missing_fields:
+                                            print(f"Missing required fields in extracted JSON: {missing_fields}")
+                                            # Create default values for missing fields
+                                            for field in missing_fields:
+                                                evaluation_data[field] = 0
+                                        
+                                        # Ensure Notes field exists
+                                        if "Notes" not in evaluation_data:
+                                            evaluation_data["Notes"] = thought
+                                            
+                                        print(f"Successfully extracted and parsed JSON from text: {json.dumps(evaluation_data, indent=2)}")
+                                        return evaluation_data
+                                    else:
+                                        print("Could not find valid JSON structure in text")
+                                except json.JSONDecodeError as e2:
+                                    print(f"Error extracting JSON from text: {str(e2)}")
+                                    print(f"Attempted to parse: {json_str}")
+                                except Exception as e3:
+                                    print(f"Unexpected error while processing text: {str(e3)}")
+                                
+                                # If no valid JSON found, create default evaluation data
+                                print("Creating default evaluation data with original thought in Notes")
                                 return {
                                     "Personalization": 0,
                                     "Language_Simplicity": 0,

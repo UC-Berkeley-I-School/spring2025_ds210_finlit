@@ -3,13 +3,8 @@ app:
   icon: 🤖
   icon_background: '#FFEAD5'
   mode: agent-chat
-  name: Guided Flow 2 Claude
+  name: Baseline_claude
   use_icon_as_answer_icon: false
-dependencies:
-- current_identifier: null
-  type: marketplace
-  value:
-    marketplace_plugin_unique_identifier: langgenius/anthropic:0.0.4@fb3e45f50d845d68735692ece0878a6566995d755f72f3af46e01ab3dcc0d8b8
 kind: app
 model_config:
   agent_mode:
@@ -60,7 +55,7 @@ model_config:
       stop: []
     mode: chat
     name: claude-3-5-sonnet-20241022
-    provider: langgenius/anthropic/anthropic
+    provider: anthropic
   more_like_this:
     enabled: false
   opening_statement: 'Hello! I am your personal financial education bot, here to empower
@@ -115,7 +110,7 @@ model_config:
 
     1️⃣ Personal factors:
 
-    Number of dependents they support {{dependents_count}}
+    Number of children {{number_of_kids}}
 
     Housing situation {{housing}} (live-in workers have lower costs)
 
@@ -128,9 +123,11 @@ model_config:
 
     Banking status {{bank_account}} (e.g., has/no bank account)
 
-    Debt situation {{debt_status}}
+    Debt situation {{debt_information}}
 
-    Remittance details {{remittance_status}}, {{remittance_amount}}
+    Remittance details {{remittance_information}}, {{remittance_amount}}
+
+    Who they support financial back home {{financial_dependents}}
 
 
     How to Teach
@@ -179,7 +176,7 @@ model_config:
   user_input_form:
   - select:
       default: ''
-      label: dependents_count
+      label: number_of_kids
       options:
       - None
       - '1'
@@ -187,7 +184,7 @@ model_config:
       - '3'
       - More than 3
       required: true
-      variable: dependents_count
+      variable: number_of_kids
   - select:
       default: ''
       label: remittance_amount
@@ -206,29 +203,34 @@ model_config:
       - FAB
       - Emirates NBD
       - ADCB
-      - ADIB
+      - Mashreq Bank
+      - RAKBANK
+      - Dubai Islamic Bank
+      - Sharjah Islamic Bank
+      - Emirates Islamic Bank
+      - CBD
       - No Bank Account
       required: true
       variable: bank_account
   - select:
       default: ''
-      label: debt_status
+      label: debt_information
       options:
       - Debt in Home Country
       - Debt in UAE
       - No Debt
       required: true
-      variable: debt_status
+      variable: debt_information
   - select:
       default: ''
-      label: remittance_status
+      label: remittance_information
       options:
       - Send money with Bank Transfer
       - Send money with Exchange House
       - Send money offline
       - Don't send any money
       required: true
-      variable: remittance_status
+      variable: remittance_information
   - select:
       default: ''
       label: housing
@@ -258,4 +260,15 @@ model_config:
       - College
       required: true
       variable: education_level
+  - select:
+      default: ''
+      label: financial_dependents
+      options:
+      - No One
+      - Just Kids
+      - Just Parents
+      - Kids and Parents
+      - Entire Extended Family
+      required: true
+      variable: financial_dependents
 version: 0.1.5

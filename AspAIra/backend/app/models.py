@@ -18,23 +18,23 @@ class User(UserBase):
     last_login: Optional[datetime] = None
 
 class ProfilePart1(BaseModel):
-    country_of_origin: Literal["Filipino", "Kenyan", "Sri Lankan"]
+    country_of_origin: Literal["Philippines", "India", "Bangladesh", "Nepal", "Ethiopia", "Kenya", "Uganda", "Sri Lanka", "Other"]
     time_in_uae: Literal["Less than a year", "1-3 years", "3-5 years", "5-10 years", "10+ years"]
-    job_title: Literal["Live In maid", "Live out maid", "Cook", "Nanny"]
+    job_title: Literal["Live In maid", "Live Out maid", "Cook", "Nanny"]
     housing: Literal["Live In", "Live Out", "Temporary Housing"]
-    education_level: Literal["None", "Primary school", "High school", "College"]
+    education_level: Literal["None", "Primary School", "High School", "College"]
     number_of_kids: Literal["None", "1", "2", "3", "More than 3"]
 
     class Config:
         populate_by_name = True
 
 class ProfilePart2(BaseModel):
-    bank_account: Literal["FAB", "Emirates NBD", "ADCB", "ADIB", "No Bank Account"]
+    bank_account: Literal["FAB", "Emirates NBD", "ADCB", "Mashreq Bank", "RAKBANK", "Dubai Islamic Bank", "Sharjah Islamic Bank", "Emirates Islamic Bank", "CBD", "No Bank Account"]
     debt_information: Literal["Debt in Home Country", "Debt in UAE", "No Debt"]
     remittance_information: Literal["Send money with Bank Transfer", "Send money with Exchange House", 
                                   "Send money offline", "Don't Send any money"]
     remittance_amount: Literal["Less than 100 AED", "100-500 AED", "500-1000 AED", "1000-2000 AED", "More than 2000 AED"]
-    financial_dependents: Literal["None", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"]
+    financial_dependents: Literal["No One", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"]
 
     class Config:
         populate_by_name = True
@@ -55,7 +55,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     message: str
     timestamp: datetime
-    interaction_type: Literal["opening", "content", "quiz", "feedback"]
+    interaction_type: Literal["content", "quiz_prompt", "quiz_result"]
     quiz: Optional[List[Dict]] = None
 
 class ChatInteraction(BaseModel):
@@ -63,7 +63,7 @@ class ChatInteraction(BaseModel):
     timestamp: datetime
     message: str
     response: str
-    interaction_type: Literal["opening", "content", "quiz", "feedback"]
+    interaction_type: Literal["content", "quiz_prompt", "quiz_result"]
     metadata: Dict = Field(default_factory=dict)
     quiz_data: Optional[Dict] = None
     quiz_answers: Optional[List[str]] = None
@@ -122,10 +122,12 @@ class ChatMetadata(BaseModel):
     retriever_resources: Optional[List[RetrieverResource]] = None
 
 class QuizData(BaseModel):
-    questions: List[str]
-    answers: List[str]
-    score: float
-    feedback: str
+    quiz_id: str
+    questions: Optional[List[Dict]] = None  # For quiz_prompt
+    user_answers: Optional[List[str]] = None  # For quiz_result
+    correct_answers: Optional[List[str]] = None  # For quiz_result
+    score: Optional[int] = None  # For quiz_result
+    feedback: Optional[str] = None  # For quiz_result
 
 class ChatMessage(BaseModel):
     """Model for chat messages stored in the database"""
@@ -136,7 +138,7 @@ class ChatMessage(BaseModel):
     timestamp: datetime
     message: str
     response: str
-    interaction_type: str
+    interaction_type: Literal["content", "quiz_prompt", "quiz_result"]
     dify_metadata: Optional[dict] = None
     quiz_data: Optional[dict] = None
     usage_metrics: Optional[dict] = None

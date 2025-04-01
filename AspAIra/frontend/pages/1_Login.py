@@ -29,6 +29,20 @@ st.markdown("""
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
     
+    /* Hide password recommendation popup */
+    div[data-testid="stPasswordInput"] div[data-testid="stMarkdownContainer"],
+    div[data-testid="stPasswordInput"] div[data-testid="stMarkdownContainer"] *,
+    div[data-testid="stPasswordInput"] div[data-testid="stMarkdownContainer"] + div,
+    div[data-testid="stPasswordInput"] div[data-testid="stMarkdownContainer"] + div * {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        height: 0 !important;
+        width: 0 !important;
+        position: absolute !important;
+        pointer-events: none !important;
+    }
+    
     /* Block analytics */
     iframe[src*="analytics"], iframe[src*="segment"],
     script[src*="analytics"], script[src*="segment"],
