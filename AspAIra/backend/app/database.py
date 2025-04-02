@@ -474,6 +474,10 @@ def save_chat_message(
         if usage_metrics:
             converted_metrics = {}
             for key, value in usage_metrics.items():
+                # Handle latency as string with 8 decimal places
+                #if key == 'latency' and isinstance(value, (int, float)):
+                #    converted_metrics[key] = f"{value:.8f}"
+                # Handle other numeric values as Decimal
                 if isinstance(value, (int, float)):
                     converted_metrics[key] = Decimal(str(value))
                 elif isinstance(value, dict):
@@ -484,6 +488,14 @@ def save_chat_message(
                 else:
                     converted_metrics[key] = value
             usage_metrics = converted_metrics
+        
+        # # Manual latency override (commented out to test Dify's native latency handling)
+        if dify_metadata and 'manual_latency' in dify_metadata:
+             if not usage_metrics:
+                 usage_metrics = {}
+             # Format the latency with 8 decimal places to preserve precision
+             usage_metrics['latency'] = f"{dify_metadata['manual_latency']:.8f}"
+             print(f"Updated usage_metrics with manual latency: {dify_metadata['manual_latency']}ms")
         
         # Prepare the item for DynamoDB
         item = {

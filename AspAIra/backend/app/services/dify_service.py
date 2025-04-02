@@ -12,6 +12,7 @@ import requests
 from sseclient import SSEClient
 from typing import Dict, AsyncGenerator, Optional, Any, List
 from datetime import datetime
+import time
 from ..database import save_chat_message, get_chat_history
 from ..config import AGENT_CONFIGS, ACTIVE_AGENT_VERSION
 
@@ -62,6 +63,9 @@ class DifyService:
             print(f"Mapped inputs for Dify: {required_inputs}")
             print(f"Conversation ID: {conversation_id}")
 
+            # Capture start timestamp
+            start_time = time.time()
+
             # Prepare request data
             request_data = {
                 "inputs": required_inputs,
@@ -97,6 +101,7 @@ class DifyService:
                 "agent_thoughts": []
             }
             usage_metrics = None
+            first_event_received = False
 
             # Process streaming response
             for line in response.iter_lines():
@@ -108,6 +113,14 @@ class DifyService:
                             event_type = data.get('event')
                             print(f"\nReceived event type: {event_type}")
                             print(f"Complete event data: {json.dumps(data, indent=2)}")
+                            
+                            # Capture first event timestamp for latency calculation
+                            if not first_event_received:
+                                end_time = time.time()
+                                manual_latency = (end_time - start_time) * 1000  # Convert to milliseconds
+                                dify_metadata['manual_latency'] = manual_latency  # Store in dify_metadata
+                                first_event_received = True
+                                print(f"Calculated and stored manual latency: {manual_latency}ms")
                             
                             if event_type == 'agent_message':
                                 # Store message_id and conversation_id from any agent_message event
@@ -132,8 +145,10 @@ class DifyService:
                                 yield {'event': 'agent_thought', 'data': data}
                             
                             elif event_type == 'message_end':
-                                # Get usage metrics
+                                # Get usage metrics and override latency with manual calculation
                                 usage_metrics = data.get('metadata', {}).get('usage', {})
+                                if usage_metrics and first_event_received:
+                                    usage_metrics['latency'] = manual_latency
                                 if conversation_id:
                                     self.set_conversation_id(conversation_id)
                                 yield {'event': 'message_end', 'data': data}

@@ -220,10 +220,29 @@ st.markdown("""
 def start_fresh_conversation():
     """Start a completely fresh conversation by clearing state and getting initial message"""
     print("Frontend: Starting fresh conversation")
-    # Clear all relevant state
+    # Clear all session state except authentication-related states
+    auth_token = st.session_state.get('access_token')
+    username = st.session_state.get('username')
+    last_username = st.session_state.get('last_username')
+    
+    # Clear all session state
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    
+    # Restore authentication states
+    if auth_token:
+        st.session_state.access_token = auth_token
+    if username:
+        st.session_state.username = username
+    if last_username:
+        st.session_state.last_username = last_username
+    
+    # Initialize required session states
     st.session_state.chat_history = []
     st.session_state.conversation_id = None
     st.session_state.waiting_for_navigation = False
+    st.session_state.is_loading = False
+    st.session_state.user_input = ""
     
     # Get initial message
     get_initial_message()
@@ -246,7 +265,7 @@ def send_message():
         if message_lower in ["1", "start new topic"]:
             # Start fresh conversation
             start_fresh_conversation()
-        else:
+        elif message_lower in ["2", "end the session", "end session"]:
             # Clear all session state before redirecting
             for key in list(st.session_state.keys()):
                 del st.session_state[key]

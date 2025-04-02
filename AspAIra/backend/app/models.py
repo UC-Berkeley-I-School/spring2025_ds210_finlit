@@ -111,7 +111,7 @@ class TokenUsage(BaseModel):
     total_tokens: int
     total_price: str
     currency: str
-    latency: float
+    latency: str
 
 class ChatMetadata(BaseModel):
     message_length: int

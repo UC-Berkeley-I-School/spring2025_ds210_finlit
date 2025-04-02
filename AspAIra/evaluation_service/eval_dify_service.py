@@ -71,10 +71,10 @@ class DifyEvaluationService:
         """Send data to Dify API using streaming mode"""
         try:
             # Log the request data for debugging
-            print("\nSending request to Dify:")
-            print(f"URL: {self.config['base_url']}/v1/chat-messages")
-            print(f"Headers: {self.headers}")
-            print(f"Request data: {json.dumps(data, indent=2)}")
+            # print("\nSending request to Dify:")
+            # print(f"URL: {self.config['base_url']}/v1/chat-messages")
+            # print(f"Headers: {self.headers}")
+            # print(f"Request data: {json.dumps(data, indent=2)}")
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -82,11 +82,11 @@ class DifyEvaluationService:
                     headers=self.headers,
                     json=data
                 ) as response:
-                    print(f"\nDify Response Status: {response.status}")
-                    print(f"Response Headers: {response.headers}")
+                    # print(f"\nDify Response Status: {response.status}")
+                    # print(f"Response Headers: {response.headers}")
                     
                     if response.status == 200:
-                        print("\nStarting to process streaming response...")
+                        # print("\nStarting to process streaming response...")
                         
                         # Store the last agent_thought event
                         last_thought_event = None
@@ -95,18 +95,18 @@ class DifyEvaluationService:
                             if line:
                                 try:
                                     line = line.decode('utf-8')
-                                    print(f"\nRaw line received: {line}")
+                                    # print(f"\nRaw line received: {line}")
                                     
                                     if line.startswith('data: '):
                                         data = json.loads(line[6:])
                                         event_type = data.get('event')
-                                        print(f"Event type: {event_type}")
-                                        print(f"Event data: {json.dumps(data, indent=2)}")
+                                        # print(f"Event type: {event_type}")
+                                        # print(f"Event data: {json.dumps(data, indent=2)}")
                                         
                                         if event_type == 'agent_thought':
                                             # Store this thought event
                                             last_thought_event = data
-                                            print(f"Stored thought event: {data.get('thought', '')}")
+                                            # print(f"Stored thought event: {data.get('thought', '')}")
                                         
                                         elif event_type == 'error':
                                             print(f"Error from Dify: {data.get('message', 'Unknown error')}")
@@ -124,12 +124,12 @@ class DifyEvaluationService:
                         # After processing all events, handle the last thought event
                         if last_thought_event:
                             thought = last_thought_event.get('thought', '')
-                            print(f"\nProcessing final thought: {thought}")
+                            # print(f"\nProcessing final thought: {thought}")
                             
                             try:
                                 # Try to parse the thought as JSON
                                 evaluation_data = json.loads(thought)
-                                print(f"Successfully parsed evaluation data: {json.dumps(evaluation_data, indent=2)}")
+                                # print(f"Successfully parsed evaluation data: {json.dumps(evaluation_data, indent=2)}")
                                 return evaluation_data
                             except json.JSONDecodeError as e:
                                 print(f"Error parsing thought as JSON: {str(e)}")
@@ -142,13 +142,15 @@ class DifyEvaluationService:
                                     end_idx = thought.rfind('}') + 1
                                     
                                     if start_idx == -1:
-                                        print("No opening curly brace found in text")
+                                        # print("No opening curly brace found in text")
+                                        pass
                                     if end_idx == 0:
-                                        print("No closing curly brace found in text")
+                                        # print("No closing curly brace found in text")
+                                        pass
                                         
                                     if start_idx != -1 and end_idx != 0:
                                         json_str = thought[start_idx:end_idx]
-                                        print(f"Extracted JSON string: {json_str}")
+                                        # print(f"Extracted JSON string: {json_str}")
                                         
                                         evaluation_data = json.loads(json_str)
                                         
@@ -161,7 +163,7 @@ class DifyEvaluationService:
                                         missing_fields = [field for field in required_fields if field not in evaluation_data]
                                         
                                         if missing_fields:
-                                            print(f"Missing required fields in extracted JSON: {missing_fields}")
+                                            # print(f"Missing required fields in extracted JSON: {missing_fields}")
                                             # Create default values for missing fields
                                             for field in missing_fields:
                                                 evaluation_data[field] = 0
@@ -170,10 +172,11 @@ class DifyEvaluationService:
                                         if "Notes" not in evaluation_data:
                                             evaluation_data["Notes"] = thought
                                             
-                                        print(f"Successfully extracted and parsed JSON from text: {json.dumps(evaluation_data, indent=2)}")
+                                        # print(f"Successfully extracted and parsed JSON from text: {json.dumps(evaluation_data, indent=2)}")
                                         return evaluation_data
                                     else:
-                                        print("Could not find valid JSON structure in text")
+                                        # print("Could not find valid JSON structure in text")
+                                        pass
                                 except json.JSONDecodeError as e2:
                                     print(f"Error extracting JSON from text: {str(e2)}")
                                     print(f"Attempted to parse: {json_str}")
@@ -181,7 +184,7 @@ class DifyEvaluationService:
                                     print(f"Unexpected error while processing text: {str(e3)}")
                                 
                                 # If no valid JSON found, create default evaluation data
-                                print("Creating default evaluation data with original thought in Notes")
+                                # print("Creating default evaluation data with original thought in Notes")
                                 return {
                                     "Personalization": 0,
                                     "Language_Simplicity": 0,

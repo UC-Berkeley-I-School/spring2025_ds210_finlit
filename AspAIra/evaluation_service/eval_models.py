@@ -22,14 +22,14 @@ PROFILE2_FIELDS = {
 
 class UsageMetrics(BaseModel):
     """Model for conversation usage metrics"""
-    total_tokens_sum: Decimal
-    total_price_sum: Decimal
-    avg_tokens_per_turn: Decimal
-    avg_respons_tokens: Decimal
-    avg_cost_per_turn: Decimal
     num_turns: int
+    avg_tokens_per_turn: Decimal
+    avg_completion_tokens: Decimal
+    avg_cost_per_turn: Decimal
+    total_price: Decimal
     avg_latency: Decimal
     max_latency: Decimal
+    currency: str = "USD"
 
 class EvaluationMetrics(BaseModel):
     """Model for evaluation metrics"""
@@ -71,24 +71,16 @@ class EvaluationInput(BaseModel):
     remittance_information: Dict
     financial_dependents: int
 
-class ConversationEvaluation(BaseModel):
-    """Model for storing evaluation results"""
-    conversation_id: str
-    username: str
-    evaluation_timestamp: datetime
-    metrics: EvaluationMetrics
-    usage_metrics: Optional[UsageMetrics] = None
-    status: str = "completed"
-
 class DifyEvaluationOutput(BaseModel):
     """Model for Dify evaluation output"""
     conversation_id: str
     username: str
-    agent_id: str  # Added agent_id field
+    agent_id: str
     evaluation_timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
     Personalization: int = Field(ge=0, le=5)
     Language_Simplicity: int = Field(ge=0, le=5)
     Response_Length: int = Field(ge=0, le=5)
     Content_Relevance: int = Field(ge=0, le=5)
     Content_Difficulty: int = Field(ge=0, le=5)
-    Notes: str 
+    Notes: str
+    usage_metrics: Optional[UsageMetrics] = None 

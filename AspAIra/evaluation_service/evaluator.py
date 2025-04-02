@@ -2,9 +2,10 @@ import asyncio
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
+from decimal import Decimal
 from .eval_database import EvaluationDatabase
 from .eval_dify_service import DifyEvaluationService
-from .eval_models import ConversationEvaluation, DifyEvaluationOutput
+from .eval_models import DifyEvaluationOutput, UsageMetrics
 
 # Configure logging
 logging.basicConfig(
@@ -126,10 +127,78 @@ class ConversationEvaluator:
                 logger.error(f"No evaluation response received for conversation {conversation_id}")
                 return None
             
+            # Compute usage metrics
+            usage_metrics = self._compute_usage_metrics(messages)
+            
+            # Add usage metrics to evaluation response
+            evaluation_response.usage_metrics = usage_metrics
+            
             return evaluation_response
             
         except Exception as e:
             logger.error(f"Error in _evaluate_conversation for {conversation_id}: {str(e)}", exc_info=True)
+            return None
+            
+    def _compute_usage_metrics(self, messages: List[Dict]) -> Optional[UsageMetrics]:
+        """Compute usage metrics from conversation messages"""
+        try:
+            if not messages:
+                logger.warning("No messages provided for usage metrics computation")
+                return None
+                
+            # Initialize metrics
+            total_tokens = Decimal('0')
+            total_completion_tokens = Decimal('0')
+            total_cost = Decimal('0')
+            total_latency = Decimal('0')
+            max_latency = Decimal('0')
+            
+            # Process each message
+            for msg in messages:
+                usage = msg.get('usage_metrics', {})
+                
+                # Sum up tokens - properly handle prompt and completion tokens
+                prompt_tokens = Decimal(str(usage.get('prompt_tokens', 0)))
+                completion_tokens = Decimal(str(usage.get('completion_tokens', 0)))
+                total_tokens += prompt_tokens + completion_tokens
+                total_completion_tokens += completion_tokens
+                
+                # Sum up costs - using total_price which already includes both prompt and completion costs
+                cost = Decimal(str(usage.get('total_price', '0')))
+                total_cost += cost
+                
+                # Track latency
+                latency = Decimal(str(usage.get('latency', 0)))
+                total_latency += latency
+                max_latency = max(max_latency, latency)
+            
+            # Calculate averages
+            num_turns = len(messages)
+            if num_turns > 0:
+                avg_tokens_per_turn = total_tokens / Decimal(str(num_turns))
+                avg_completion_tokens = total_completion_tokens / Decimal(str(num_turns))
+                avg_cost_per_turn = total_cost / Decimal(str(num_turns))
+                avg_latency = total_latency / Decimal(str(num_turns))
+            else:
+                avg_tokens_per_turn = Decimal('0')
+                avg_completion_tokens = Decimal('0')
+                avg_cost_per_turn = Decimal('0')
+                avg_latency = Decimal('0')
+            
+            # Create UsageMetrics object
+            return UsageMetrics(
+                num_turns=num_turns,
+                avg_tokens_per_turn=avg_tokens_per_turn,
+                avg_completion_tokens=avg_completion_tokens,
+                avg_cost_per_turn=avg_cost_per_turn,
+                total_price=total_cost,
+                avg_latency=avg_latency,
+                max_latency=max_latency,
+                currency="USD"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error computing usage metrics: {str(e)}", exc_info=True)
             return None
 
 async def main():
