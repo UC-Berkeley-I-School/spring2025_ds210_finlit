@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from .eval_database import EvaluationDatabase
 from .eval_dify_service import DifyEvaluationService
-from .eval_models import DifyEvaluationOutput, UsageMetrics
+from .eval_models import DifyEvaluationOutput, UsageMetrics, QuizMetrics
 
 # Configure logging
 logging.basicConfig(
@@ -130,8 +130,12 @@ class ConversationEvaluator:
             # Compute usage metrics
             usage_metrics = self._compute_usage_metrics(messages)
             
-            # Add usage metrics to evaluation response
+            # Compute quiz metrics
+            quiz_metrics = self._compute_quiz_metrics(messages)
+            
+            # Add metrics to evaluation response
             evaluation_response.usage_metrics = usage_metrics
+            evaluation_response.quiz_metrics = quiz_metrics
             
             return evaluation_response
             
@@ -199,6 +203,31 @@ class ConversationEvaluator:
             
         except Exception as e:
             logger.error(f"Error computing usage metrics: {str(e)}", exc_info=True)
+            return None
+
+    def _compute_quiz_metrics(self, messages: List[Dict]) -> Optional[QuizMetrics]:
+        """Compute quiz metrics from conversation messages"""
+        try:
+            if not messages:
+                logger.warning("No messages provided for quiz metrics computation")
+                return None
+                
+            # Look for quiz result in messages
+            for msg in messages:
+                if msg.get('interaction_type') == 'quiz_result' and msg.get('quiz_data'):
+                    quiz_data = msg['quiz_data']
+                    logger.info(f"Found quiz result with score: {quiz_data.get('score')}")
+                    return QuizMetrics(
+                        quiz_taken=True,
+                        quiz_score=quiz_data.get('score')
+                    )
+            
+            # If no quiz result found
+            logger.info("No quiz result found in conversation")
+            return QuizMetrics(quiz_taken=False)
+            
+        except Exception as e:
+            logger.error(f"Error computing quiz metrics: {str(e)}", exc_info=True)
             return None
 
 async def main():

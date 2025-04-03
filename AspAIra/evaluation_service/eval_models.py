@@ -29,7 +29,12 @@ class UsageMetrics(BaseModel):
     total_price: Decimal
     avg_latency: Decimal
     max_latency: Decimal
-    currency: str = "USD"
+    currency: str
+
+class QuizMetrics(BaseModel):
+    """Model for quiz metrics"""
+    quiz_taken: bool
+    quiz_score: Optional[int] = None
 
 class EvaluationMetrics(BaseModel):
     """Model for evaluation metrics"""
@@ -57,7 +62,7 @@ class UserProfile(BaseModel):
 
 class EvaluationInput(BaseModel):
     """Model for evaluation input data"""
-    convo_id: str  # Changed from conv_id to convo_id
+    convo_id: str  
     username: str
     conversation_history: str  # Plain text conversation history
     country_of_origin: str
@@ -71,6 +76,12 @@ class EvaluationInput(BaseModel):
     remittance_information: Dict
     financial_dependents: int
 
+class EvaluationNotes(BaseModel):
+    summary: str
+    key_insights: str
+    areas_for_improvement: str
+    recommendations: str
+
 class DifyEvaluationOutput(BaseModel):
     """Model for Dify evaluation output"""
     conversation_id: str
@@ -82,5 +93,6 @@ class DifyEvaluationOutput(BaseModel):
     Response_Length: int = Field(ge=0, le=5)
     Content_Relevance: int = Field(ge=0, le=5)
     Content_Difficulty: int = Field(ge=0, le=5)
-    Notes: str
-    usage_metrics: Optional[UsageMetrics] = None 
+    evaluation_notes: EvaluationNotes
+    usage_metrics: Optional[UsageMetrics] = None
+    quiz_metrics: Optional[QuizMetrics] = None 

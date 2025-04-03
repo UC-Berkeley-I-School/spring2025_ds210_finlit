@@ -629,39 +629,6 @@ def get_user_quiz_history(username: str) -> List[Dict]:
         print(f"Error getting quiz history: {str(e)}")
         return []
 
-def update_conversation_activity(conversation_id: str) -> bool:
-    """Update conversation's last activity timestamp"""
-    try:
-        table = dynamodb.Table(CONVERSATIONS_TABLE)
-        table.update_item(
-            Key={'conversation_id': conversation_id},
-            UpdateExpression='SET last_activity = :now',
-            ExpressionAttributeValues={
-                ':now': datetime.utcnow().isoformat()
-            }
-        )
-        return True
-    except Exception as e:
-        print(f"Error updating conversation activity: {str(e)}")
-        return False
-
-def update_conversation_id(username: str, dify_conversation_id: str) -> bool:
-    """Update conversation with Dify's conversation ID"""
-    try:
-        table = dynamodb.Table(CONVERSATIONS_TABLE)
-        table.update_item(
-            Key={'username': username},
-            UpdateExpression='SET conversation_id = :conv_id, created_at = :now, last_activity = :now',
-            ExpressionAttributeValues={
-                ':conv_id': dify_conversation_id,
-                ':now': datetime.utcnow().isoformat()
-            }
-        )
-        return True
-    except Exception as e:
-        print(f"Error updating conversation ID: {str(e)}")
-        return False
-
 def verify_token(request: Request) -> Optional[str]:
     """Verify JWT token from request header"""
     try:

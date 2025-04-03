@@ -12,7 +12,7 @@ import aiohttp
 from typing import Dict, List, Optional, AsyncGenerator
 from datetime import datetime
 from dotenv import load_dotenv
-from .eval_models import DifyEvaluationOutput
+from .eval_models import DifyEvaluationOutput, EvaluationNotes
 from decimal import Decimal
 
 load_dotenv()
@@ -70,43 +70,26 @@ class DifyEvaluationService:
     async def send_to_dify(self, data: Dict) -> Optional[Dict]:
         """Send data to Dify API using streaming mode"""
         try:
-            # Log the request data for debugging
-            # print("\nSending request to Dify:")
-            # print(f"URL: {self.config['base_url']}/v1/chat-messages")
-            # print(f"Headers: {self.headers}")
-            # print(f"Request data: {json.dumps(data, indent=2)}")
-            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.config['base_url']}/v1/chat-messages",
                     headers=self.headers,
                     json=data
                 ) as response:
-                    # print(f"\nDify Response Status: {response.status}")
-                    # print(f"Response Headers: {response.headers}")
-                    
                     if response.status == 200:
-                        # print("\nStarting to process streaming response...")
-                        
-                        # Store the last agent_thought event
                         last_thought_event = None
                         
                         async for line in response.content:
                             if line:
                                 try:
                                     line = line.decode('utf-8')
-                                    # print(f"\nRaw line received: {line}")
                                     
                                     if line.startswith('data: '):
                                         data = json.loads(line[6:])
                                         event_type = data.get('event')
-                                        # print(f"Event type: {event_type}")
-                                        # print(f"Event data: {json.dumps(data, indent=2)}")
                                         
                                         if event_type == 'agent_thought':
-                                            # Store this thought event
                                             last_thought_event = data
-                                            # print(f"Stored thought event: {data.get('thought', '')}")
                                         
                                         elif event_type == 'error':
                                             print(f"Error from Dify: {data.get('message', 'Unknown error')}")
@@ -114,85 +97,57 @@ class DifyEvaluationService:
                                             
                                 except json.JSONDecodeError as e:
                                     print(f"Error decoding JSON line: {str(e)}")
-                                    print(f"Problematic line: {line}")
                                     continue
                                 except Exception as e:
                                     print(f"Error processing line: {str(e)}")
-                                    print(f"Problematic line: {line}")
                                     continue
                         
-                        # After processing all events, handle the last thought event
                         if last_thought_event:
                             thought = last_thought_event.get('thought', '')
-                            # print(f"\nProcessing final thought: {thought}")
                             
                             try:
-                                # Try to parse the thought as JSON
+                                # First try to parse the entire response as JSON
                                 evaluation_data = json.loads(thought)
-                                # print(f"Successfully parsed evaluation data: {json.dumps(evaluation_data, indent=2)}")
-                                return evaluation_data
-                            except json.JSONDecodeError as e:
-                                print(f"Error parsing thought as JSON: {str(e)}")
-                                print(f"Thought content: {thought}")
-                                
-                                # Try to extract JSON from the text
+                            except json.JSONDecodeError:
                                 try:
-                                    # Look for JSON-like structure in the text
+                                    # Try to extract JSON from the text
                                     start_idx = thought.find('{')
                                     end_idx = thought.rfind('}') + 1
-                                    
-                                    if start_idx == -1:
-                                        # print("No opening curly brace found in text")
-                                        pass
-                                    if end_idx == 0:
-                                        # print("No closing curly brace found in text")
-                                        pass
-                                        
                                     if start_idx != -1 and end_idx != 0:
                                         json_str = thought[start_idx:end_idx]
-                                        # print(f"Extracted JSON string: {json_str}")
-                                        
                                         evaluation_data = json.loads(json_str)
-                                        
-                                        # Validate required fields
-                                        required_fields = [
-                                            "Personalization", "Language_Simplicity",
-                                            "Response_Length", "Content_Relevance",
-                                            "Content_Difficulty"
-                                        ]
-                                        missing_fields = [field for field in required_fields if field not in evaluation_data]
-                                        
-                                        if missing_fields:
-                                            # print(f"Missing required fields in extracted JSON: {missing_fields}")
-                                            # Create default values for missing fields
-                                            for field in missing_fields:
-                                                evaluation_data[field] = 0
-                                        
-                                        # Ensure Notes field exists
-                                        if "Notes" not in evaluation_data:
-                                            evaluation_data["Notes"] = thought
-                                            
-                                        # print(f"Successfully extracted and parsed JSON from text: {json.dumps(evaluation_data, indent=2)}")
-                                        return evaluation_data
                                     else:
-                                        # print("Could not find valid JSON structure in text")
-                                        pass
-                                except json.JSONDecodeError as e2:
-                                    print(f"Error extracting JSON from text: {str(e2)}")
-                                    print(f"Attempted to parse: {json_str}")
-                                except Exception as e3:
-                                    print(f"Unexpected error while processing text: {str(e3)}")
-                                
-                                # If no valid JSON found, create default evaluation data
-                                # print("Creating default evaluation data with original thought in Notes")
-                                return {
-                                    "Personalization": 0,
-                                    "Language_Simplicity": 0,
-                                    "Response_Length": 0,
-                                    "Content_Relevance": 0,
-                                    "Content_Difficulty": 0,
-                                    "Notes": thought  # Store the agent's message in Notes
-                                }
+                                        # If no JSON found, create default structure
+                                        evaluation_data = {
+                                            "Personalization": 0,
+                                            "Language_Simplicity": 0,
+                                            "Response_Length": 0,
+                                            "Content_Relevance": 0,
+                                            "Content_Difficulty": 0,
+                                            "evaluation_notes": {
+                                                "summary": thought,
+                                                "key_insights": "",
+                                                "areas_for_improvement": "",
+                                                "recommendations": ""
+                                            }
+                                        }
+                                except json.JSONDecodeError:
+                                    # If JSON extraction fails, create default structure
+                                    evaluation_data = {
+                                        "Personalization": 0,
+                                        "Language_Simplicity": 0,
+                                        "Response_Length": 0,
+                                        "Content_Relevance": 0,
+                                        "Content_Difficulty": 0,
+                                        "evaluation_notes": {
+                                            "summary": thought,
+                                            "key_insights": "",
+                                            "areas_for_improvement": "",
+                                            "recommendations": ""
+                                        }
+                                    }
+                            
+                            return evaluation_data
                         else:
                             print("No agent_thought events received")
                             return None
@@ -202,7 +157,6 @@ class DifyEvaluationService:
                         error_code = error_data.get('code', 'unknown')
                         error_message = error_data.get('message', 'Unknown error')
                         
-                        # Handle specific error cases
                         if error_code == 'invalid_param':
                             print(f"Invalid parameter error: {error_message}")
                         elif error_code == 'app_unavailable':
@@ -230,16 +184,14 @@ class DifyEvaluationService:
             # Format conversation history as plain text
             conversation_text = []
             for msg in messages:
-                # Format each message interaction
                 interaction = [
                     f"[{msg.get('timestamp', '')}]",
                     f"User: {msg.get('response', '')}",
                     f"Assistant: {msg.get('message', '')}",
-                    ""  # Add blank line between interactions
+                    ""
                 ]
                 conversation_text.extend(interaction)
             
-            # Join all lines with newlines
             conversation_history = "\n".join(conversation_text)
             
             # Store original values for later use
@@ -264,24 +216,29 @@ class DifyEvaluationService:
                 "financial_dependents": user_profile.get('financial_dependents', '')
             }
             
-            # Format data for Dify
             request_data = self.format_conversation_data(evaluation_input)
-            
-            # Send to Dify
             response = await self.send_to_dify(request_data)
             
             if response:
+                # Create EvaluationNotes from response
+                evaluation_notes = EvaluationNotes(
+                    summary=response.get('evaluation_notes', {}).get('summary', ''),
+                    key_insights=response.get('evaluation_notes', {}).get('key_insights', ''),
+                    areas_for_improvement=response.get('evaluation_notes', {}).get('areas_for_improvement', ''),
+                    recommendations=response.get('evaluation_notes', {}).get('recommendations', '')
+                )
+                
                 # Convert response to DifyEvaluationOutput using original values
                 return DifyEvaluationOutput(
                     conversation_id=original_conversation_id,
                     username=original_username,
-                    agent_id=original_agent_id,  # Include agent_id
+                    agent_id=original_agent_id,
                     Personalization=response['Personalization'],
                     Language_Simplicity=response['Language_Simplicity'],
                     Response_Length=response['Response_Length'],
                     Content_Relevance=response['Content_Relevance'],
                     Content_Difficulty=response['Content_Difficulty'],
-                    Notes=response['Notes']
+                    evaluation_notes=evaluation_notes
                 )
             return None
             
