@@ -30,7 +30,7 @@ AGENT_CONFIGS = {
     "Baseline_claude": {
         "api_key": "app-5UVXvE1G6wiZBZ3v0MACCfbj",  # Local Dify API key
         "base_url": "http://localhost",  # Updated to use HTTP for local development
-        "model": "clause-3-5-sonnet-20241022",
+        "model": "claude-3-5-sonnet-20241022",
         "required_inputs": {
             "number_of_kids": {"source": "profile1", "type": "string"},
             "bank_account": {"source": "profile2", "type": "string"},
@@ -46,7 +46,7 @@ AGENT_CONFIGS = {
     "V2_claude": {
         "api_key": "app-N1mfbmN31JwFFOfEhOnvGjg3",  # Local Dify API key
         "base_url": "http://localhost",  # Updated to use HTTP for local development
-        "model": "clause-3-5-sonnet-20241022",
+        "model": "claude-3-5-sonnet-20241022",
         "required_inputs": {
             "number_of_kids": {"source": "profile1", "type": "string"},
             "bank_account": {"source": "profile2", "type": "string"},
