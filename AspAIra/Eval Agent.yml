@@ -3,7 +3,7 @@ app:
   icon: 🤖
   icon_background: '#FFEAD5'
   mode: agent-chat
-  name: Eval Agent
+  name: Eval_Agent_gpt
   use_icon_as_answer_icon: false
 kind: app
 model_config:
@@ -54,8 +54,8 @@ model_config:
     completion_params:
       stop: []
     mode: chat
-    name: claude-3-opus-20240229
-    provider: anthropic
+    name: gpt-4-turbo
+    provider: openai
   more_like_this:
     enabled: false
   opening_statement: ''
@@ -89,22 +89,44 @@ model_config:
     \ Information: {{debt_information}}\n- How they Send Money Home (remittance):\
     \ {{remittance_information}}\n- Financial Dependents supported at Home: {{financial_dependents}}\n\
     \n\nEvaluate the conversation **as a whole** using these 5 criteria:\nSCORING\
-    \ RUBRIC (1–5 scale)\n1 = Very Poor | 2 = Needs Improvement | 3 = Acceptable |\
-    \ 4 = Good | 5 = Excellent\nCategory Evaluation Question\n* Personalization: Did\
-    \ the assistant tailor responses to the user’s unique profile?\n* Language Simplicity:\
-    \ Was the assistant’s language easy for someone with limited literacy?\n* Response\
-    \ Length: Were responses concise yet complete?\n* Content Relevance: Did the assistant\
-    \ directly address the user's needs or questions?\n* Content Difficulty: Was the\
-    \ information appropriate in complexity for this user?\n\nExample: If the assistant\
-    \ used banking terms like “direct deposit” or “overdraft” without explanation,\
-    \ and the user has no bank account or finished primary school, that would be a\
-    \ 2 for Language Simplicity.\n\nRespond only in the following JSON format please\
-    \ dont put any text before this just simple send the json in this format as the\
-    \ message:\n{\n  \"conversation_id\": \"{{convo_id}}\",\n  \"username\": \"{{username}}\"\
-    ,\n  \"Personalization\": <1–5>,\n  \"Language_Simplicity\": <1–5>,\n  \"Response_Length\"\
-    : <1–5>,\n  \"Content_Relevance\": <1–5>,\n  \"Content_Difficulty\": <1–5>,\n\
-    \  \"Notes\": \"Brief summary of how well the assistant did, especially for this\
-    \ user profile.\"\n}\n"
+    \ RUBRIC (0–5 scale)\n0 = Not info Info to Evaluate | 1 = Very Poor | 2 = Needs\
+    \ Improvement | 3 = Acceptable | 4 = Good | 5 = Excellent\nCategory Evaluation\
+    \ Question\n* Personalization: Did the assistant tailor responses to the user’s\
+    \ unique profile?\n* Language Simplicity: Was the assistant’s language easy for\
+    \ someone with limited literacy?\n* Response Length: Were responses concise yet\
+    \ complete?\n* Content Relevance: Did the assistant directly address the user's\
+    \ needs or questions?\n* Content Difficulty: Was the information appropriate in\
+    \ complexity for this user?\n\nExample: If the assistant used banking terms like\
+    \ “direct deposit” or “overdraft” without explanation, and the user has no bank\
+    \ account or finished primary school, that would be a 2 for Language Simplicity.\n\
+    \nIn addition to scoring these 5 criteria also please add concise 1 sentenceanswers\
+    \ to the following topics:\n1) \"summary\": \"summary of how well the assistant\
+    \ did in this session.\", \n2) \"key_insights\": \"Any interesting patterns in\
+    \ the user’s behavior, questions, or needs (e.g., user was highly engaged, struggled\
+    \ with terminology, showed interest in a specific topic).\", \n3) \"areas_for_improvement\"\
+    : \"Specific limitations or missed opportunities in the assistant’s replies.\"\
+    , \n4) \"recommendations\": \"Concrete suggestions for improving the assistant’s\
+    \ prompts, structure, or explanations to better serve this type of user\"\n\n\
+    ⚠️ Important Instructions:\n\n- You MUST respond ONLY with valid JSON.\n- Respond\
+    \ with exactly the JSON object shown below.\n- The response must start with `{`\
+    \ and end with `}`, and contain NO extra text, explanation, headings, code formatting,\
+    \ or fields.\n- **DO NOT wrap the JSON inside quotes.**\n- **DO NOT escape any\
+    \ characters inside the JSON.**\n- **DO NOT format the JSON inside a markdown\
+    \ block (no ```json).**\n- **DO NOT double-encode or present JSON as a string.**\n\
+    - **DO NOT embed the JSON inside any additional fields like raw_response or process_status.**\n\
+    \nIf you wrap the JSON in quotes or escape characters, your evaluation will be\
+    \ discarded as invalid.\n\n✅ Example of correct response:\n\n{\n  \"conversation_id\"\
+    : \"conv_456\",\n  \"username\": \"jane_doe\",\n  \"Personalization\": 4,\n  \"\
+    Language_Simplicity\": 5,\n  \"Response_Length\": 4,\n  \"Content_Relevance\"\
+    : 4,\n  \"Content_Difficulty\": 4,\n  \"evaluation_notes\": {\n    \"summary\"\
+    : \"Clear and empathetic session.\",\n    \"key_insights\": \"User engaged with\
+    \ saving topics despite limited banking.\",\n    \"areas_for_improvement\": \"\
+    Missed a chance to explain remittance types.\",\n    \"recommendations\": \"Ask\
+    \ users about remittance preferences early.\"\n  }\n}\n\n❌ Incorrect examples:\n\
+    - JSON wrapped in quotation marks.\n- JSON with escaped characters (`\\\\\\\"\
+    ` instead of `\"`).\n- JSON embedded inside a field like \"raw_response\" or \"\
+    process_status\".\n- JSON formatted inside a code block (```json).\n\nRepeat:\
+    \ Only send the pure JSON object. No wrapping. No escaping. No formatting."
   prompt_type: simple
   retriever_resource:
     enabled: true

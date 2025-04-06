@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import json
 from typing import Dict, List, Optional
 from datetime import datetime
 from decimal import Decimal
 from .eval_database import EvaluationDatabase
 from .eval_dify_service import DifyEvaluationService
-from .eval_models import DifyEvaluationOutput, UsageMetrics, QuizMetrics
+from .eval_models import DifyEvaluationOutput, UsageMetrics, QuizMetrics, JudgeEvaluation, JudgeMetrics, ScoreMetrics, EvaluationNotes
+from .eval_config import AGENT_CONFIGS
 
 # Configure logging
 logging.basicConfig(
@@ -18,11 +20,15 @@ class ConversationEvaluator:
     """Main class for evaluating conversations"""
     
     def __init__(self):
-        """Initialize the evaluator with database and Dify service"""
+        """Initialize the evaluator with database and judge services"""
         logger.info("Initializing ConversationEvaluator...")
         self.db = EvaluationDatabase()
-        self.dify = DifyEvaluationService()
-        logger.info("ConversationEvaluator initialized successfully")
+        # Create a map of judge services
+        self.judge_services = {
+            judge_id: DifyEvaluationService(config)
+            for judge_id, config in AGENT_CONFIGS.items()
+        }
+        logger.info(f"Initialized {len(self.judge_services)} judge services")
     
     async def process_conversations(self):
         """Process all conversations that need evaluation sequentially"""
@@ -112,36 +118,241 @@ class ConversationEvaluator:
         user_profile: Dict,
         agent_id: str
     ) -> Optional[DifyEvaluationOutput]:
-        """Evaluate a single conversation using Dify"""
+        """Evaluate a single conversation using multiple judges"""
         try:
-            # Process with Dify agent
-            evaluation_response = await self.dify.evaluate_conversation(
-                conversation_id=conversation_id,
-                username=username,
-                messages=messages,
-                user_profile=user_profile,
-                agent_id=agent_id
-            )
+            judge_evaluations = []
             
-            if not evaluation_response:
-                logger.error(f"No evaluation response received for conversation {conversation_id}")
+            # Run evaluation for each judge
+            for judge_id, judge_service in self.judge_services.items():
+                try:
+                    logger.info(f"Starting evaluation with judge {judge_id} for conversation {conversation_id}")
+                    
+                    # Get evaluation from judge
+                    evaluation = await judge_service.evaluate_conversation(
+                        conversation_id=conversation_id,
+                        username=username,
+                        messages=messages,
+                        user_profile=user_profile,
+                        agent_id=agent_id
+                    )
+                    
+                    if evaluation:
+                        # Log and store raw evaluation response
+                        raw_response = json.dumps(evaluation, default=str)
+                        logger.info(f"Raw evaluation from {judge_id}: {raw_response}")
+                        
+                        try:
+                            # Check for error messages in the response
+                            if any(error_indicator in raw_response.lower() for error_indicator in ["sorry", "error", "unable", "failed"]):
+                                logger.warning(f"Error response detected from {judge_id}")
+                                judge_eval = JudgeEvaluation(
+                                    judge_id=judge_id,
+                                    scores=ScoreMetrics(
+                                        Personalization=Decimal('0'),
+                                        Language_Simplicity=Decimal('0'),
+                                        Response_Length=Decimal('0'),
+                                        Content_Relevance=Decimal('0'),
+                                        Content_Difficulty=Decimal('0')
+                                    ),
+                                    evaluation_notes={
+                                        "summary": "",
+                                        "key_insights": "",
+                                        "areas_for_improvement": "",
+                                        "recommendations": ""
+                                    },
+                                    judge_metrics=None,
+                                    process_status="error",
+                                    raw_response=raw_response
+                                )
+                                logger.info(f"Created error evaluation with stored response: {judge_eval.dict()}")
+                                judge_evaluations.append(judge_eval)
+                                continue
+                            
+                            # Create judge evaluation with simplified validation
+                            judge_eval = JudgeEvaluation(
+                                judge_id=judge_id,
+                                scores=ScoreMetrics(
+                                    Personalization=evaluation.get("Personalization", Decimal('0')),
+                                    Language_Simplicity=evaluation.get("Language_Simplicity", Decimal('0')),
+                                    Response_Length=evaluation.get("Response_Length", Decimal('0')),
+                                    Content_Relevance=evaluation.get("Content_Relevance", Decimal('0')),
+                                    Content_Difficulty=evaluation.get("Content_Difficulty", Decimal('0'))
+                                ),
+                                evaluation_notes=evaluation.get("evaluation_notes", {}),
+                                judge_metrics=None,
+                                process_status="success",
+                                raw_response=None
+                            )
+                            logger.info(f"Created successful evaluation for {judge_id}: {judge_eval.dict()}")
+                            judge_evaluations.append(judge_eval)
+                            
+                        except Exception as e:
+                            logger.error(f"Error creating evaluation for {judge_id}: {str(e)}")
+                            # Create error evaluation but keep multi-agent flow
+                            judge_eval = JudgeEvaluation(
+                                judge_id=judge_id,
+                                scores=ScoreMetrics(
+                                    Personalization=Decimal('0'),
+                                    Language_Simplicity=Decimal('0'),
+                                    Response_Length=Decimal('0'),
+                                    Content_Relevance=Decimal('0'),
+                                    Content_Difficulty=Decimal('0')
+                                ),
+                                evaluation_notes={
+                                    "summary": "",
+                                    "key_insights": "",
+                                    "areas_for_improvement": "",
+                                    "recommendations": ""
+                                },
+                                judge_metrics=None,
+                                process_status="error",
+                                raw_response=raw_response
+                            )
+                            logger.info(f"Created error evaluation for {judge_id}: {judge_eval.dict()}")
+                            judge_evaluations.append(judge_eval)
+                            continue
+                            
+                    else:
+                        logger.error(f"No evaluation response from judge {judge_id}")
+                        # Create error evaluation but keep multi-agent flow
+                        judge_eval = JudgeEvaluation(
+                            judge_id=judge_id,
+                            scores=ScoreMetrics(
+                                Personalization=Decimal('0'),
+                                Language_Simplicity=Decimal('0'),
+                                Response_Length=Decimal('0'),
+                                Content_Relevance=Decimal('0'),
+                                Content_Difficulty=Decimal('0')
+                            ),
+                            evaluation_notes={
+                                "summary": "",
+                                "key_insights": "",
+                                "areas_for_improvement": "",
+                                "recommendations": ""
+                            },
+                            judge_metrics=None,
+                            process_status="error",
+                            raw_response=None
+                        )
+                        logger.info(f"Created error evaluation for no response: {judge_eval.dict()}")
+                        judge_evaluations.append(judge_eval)
+                        
+                except Exception as e:
+                    logger.error(f"Error with judge {judge_id}: {str(e)}", exc_info=True)
+                    # Create error evaluation but keep multi-agent flow
+                    judge_eval = JudgeEvaluation(
+                        judge_id=judge_id,
+                        scores=ScoreMetrics(
+                            Personalization=Decimal('0'),
+                            Language_Simplicity=Decimal('0'),
+                            Response_Length=Decimal('0'),
+                            Content_Relevance=Decimal('0'),
+                            Content_Difficulty=Decimal('0')
+                        ),
+                        evaluation_notes={
+                            "summary": "",
+                            "key_insights": "",
+                            "areas_for_improvement": "",
+                            "recommendations": ""
+                        },
+                        judge_metrics=None,
+                        process_status="error",
+                        raw_response=None
+                    )
+                    logger.info(f"Created error evaluation for judge error: {judge_eval.dict()}")
+                    judge_evaluations.append(judge_eval)
+                    continue
+            
+            if not judge_evaluations:
+                logger.error(f"No successful judge evaluations for conversation {conversation_id}")
                 return None
+            
+            # Log successful evaluations summary
+            success_count = sum(1 for e in judge_evaluations if e.process_status == "success")
+            logger.info(f"Successfully collected evaluations from {success_count} judges")
             
             # Compute usage metrics
             usage_metrics = self._compute_usage_metrics(messages)
+            logger.info(f"Computed usage metrics: {usage_metrics.dict() if usage_metrics else None}")
             
             # Compute quiz metrics
             quiz_metrics = self._compute_quiz_metrics(messages)
+            logger.info(f"Computed quiz metrics: {quiz_metrics.dict() if quiz_metrics else None}")
             
-            # Add metrics to evaluation response
-            evaluation_response.usage_metrics = usage_metrics
-            evaluation_response.quiz_metrics = quiz_metrics
+            # Create final evaluation output
+            evaluation_output = DifyEvaluationOutput(
+                conversation_id=conversation_id,
+                username=username,
+                agent_id=agent_id,
+                evaluation_timestamp=datetime.utcnow(),
+                judge_evaluations=judge_evaluations,
+                usage_metrics=usage_metrics,
+                quiz_metrics=quiz_metrics
+            )
             
-            return evaluation_response
+            return evaluation_output
             
         except Exception as e:
-            logger.error(f"Error in _evaluate_conversation for {conversation_id}: {str(e)}", exc_info=True)
+            logger.error(f"Error in _evaluate_conversation: {str(e)}", exc_info=True)
             return None
+            
+    def _validate_evaluation_response(self, response: Dict) -> bool:
+        """Validate the structure of an evaluation response"""
+        try:
+            # Required fields for scores
+            required_score_fields = [
+                "Personalization", "Language_Simplicity", "Response_Length",
+                "Content_Relevance", "Content_Difficulty"
+            ]
+            
+            # Check all required score fields are present
+            if not all(field in response for field in required_score_fields):
+                logger.warning("Missing required score fields in response")
+                return False
+                
+            # Check evaluation_notes structure
+            notes = response.get("evaluation_notes", {})
+            if not isinstance(notes, dict):
+                logger.warning("Evaluation notes is not a dictionary")
+                return False
+                
+            # Verify that all score fields are numeric (can be converted to Decimal)
+            for field in required_score_fields:
+                try:
+                    value = response.get(field)
+                    if value is not None:
+                        Decimal(str(value))
+                except (TypeError, ValueError):
+                    logger.warning(f"Invalid numeric value for field {field}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in validation: {str(e)}")
+            return False
+            
+    def _create_error_evaluation(self, judge_id: str, error_message: str, raw_response: Optional[str] = None):
+        """Create an error evaluation with proper error handling"""
+        return JudgeEvaluation(
+            judge_id=judge_id,
+            scores=ScoreMetrics(
+                Personalization=Decimal('0'),
+                Language_Simplicity=Decimal('0'),
+                Response_Length=Decimal('0'),
+                Content_Relevance=Decimal('0'),
+                Content_Difficulty=Decimal('0')
+            ),
+            evaluation_notes=EvaluationNotes(
+                summary="",  # Keep empty, error details go in raw_response
+                key_insights="",
+                areas_for_improvement="",
+                recommendations=""
+            ),
+            judge_metrics=None,
+            process_status="error",
+            raw_response=raw_response or error_message  # Store error message in raw_response if no raw_response provided
+        )
             
     def _compute_usage_metrics(self, messages: List[Dict]) -> Optional[UsageMetrics]:
         """Compute usage metrics from conversation messages"""
@@ -205,30 +416,48 @@ class ConversationEvaluator:
             logger.error(f"Error computing usage metrics: {str(e)}", exc_info=True)
             return None
 
-    def _compute_quiz_metrics(self, messages: List[Dict]) -> Optional[QuizMetrics]:
+    def _compute_quiz_metrics(self, messages: List[Dict]) -> QuizMetrics:
         """Compute quiz metrics from conversation messages"""
+        logger.info("Computing quiz metrics from messages")
+        if not messages:
+            logger.warning("No messages provided for quiz metrics computation")
+            return QuizMetrics(quiz_taken=False, quiz_score=Decimal('0'))
+            
         try:
-            if not messages:
-                logger.warning("No messages provided for quiz metrics computation")
-                return None
+            # Find the last message that contains quiz results
+            quiz_result = None
+            for message in reversed(messages):
+                if "quiz_result" in message.get("content", ""):
+                    quiz_result = message
+                    break
+            
+            if quiz_result:
+                logger.info(f"Found quiz result message: {quiz_result.get('content')}")
+                # Extract the quiz score from the message
+                quiz_score = quiz_result.get("quiz_score", 0)
+                logger.info(f"Extracted quiz score: {quiz_score} (type: {type(quiz_score)})")
                 
-            # Look for quiz result in messages
-            for msg in messages:
-                if msg.get('interaction_type') == 'quiz_result' and msg.get('quiz_data'):
-                    quiz_data = msg['quiz_data']
-                    logger.info(f"Found quiz result with score: {quiz_data.get('score')}")
-                    return QuizMetrics(
-                        quiz_taken=True,
-                        quiz_score=quiz_data.get('score')
-                    )
-            
-            # If no quiz result found
-            logger.info("No quiz result found in conversation")
-            return QuizMetrics(quiz_taken=False)
-            
+                # Convert quiz score to Decimal
+                try:
+                    if isinstance(quiz_score, (int, float)):
+                        quiz_score = Decimal(str(quiz_score))
+                    elif isinstance(quiz_score, str):
+                        quiz_score = Decimal(quiz_score)
+                    else:
+                        logger.warning(f"Unexpected quiz score type: {type(quiz_score)}, defaulting to 0")
+                        quiz_score = Decimal('0')
+                except Exception as e:
+                    logger.error(f"Error converting quiz score to Decimal: {str(e)}")
+                    quiz_score = Decimal('0')
+                
+                logger.info(f"Converted quiz score to Decimal: {quiz_score}")
+                return QuizMetrics(quiz_taken=True, quiz_score=quiz_score)
+            else:
+                logger.info("No quiz result found in messages")
+                return QuizMetrics(quiz_taken=False, quiz_score=Decimal('0'))
         except Exception as e:
-            logger.error(f"Error computing quiz metrics: {str(e)}", exc_info=True)
-            return None
+            logger.error(f"Error computing quiz metrics: {str(e)}")
+            return QuizMetrics(quiz_taken=False, quiz_score=Decimal('0'))
 
 async def main():
     """Main entry point for the evaluation service"""

@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Literal
 from datetime import datetime
 from decimal import Decimal
+from pydantic import validator
 
 # Profile field mappings
 PROFILE1_FIELDS = {
@@ -29,20 +30,20 @@ class UsageMetrics(BaseModel):
     total_price: Decimal
     avg_latency: Decimal
     max_latency: Decimal
-    currency: str
+    currency: str = "USD"
 
 class QuizMetrics(BaseModel):
     """Model for quiz metrics"""
     quiz_taken: bool
-    quiz_score: Optional[int] = None
+    quiz_score: Decimal = Field(default=Decimal('0'))
 
-class EvaluationMetrics(BaseModel):
-    """Model for evaluation metrics"""
-    Personalization: int = Field(ge=1, le=5)
-    Language_Simplicity: int = Field(ge=1, le=5)
-    Response_Length: int = Field(ge=1, le=5)
-    Content_Relevance: int = Field(ge=1, le=5)
-    Content_Difficulty: int = Field(ge=1, le=5)
+class ScoreMetrics(BaseModel):
+    """Model for evaluation scores"""
+    Personalization: Decimal = Field(ge=0, le=5)
+    Language_Simplicity: Decimal = Field(ge=0, le=5)
+    Response_Length: Decimal = Field(ge=0, le=5)
+    Content_Relevance: Decimal = Field(ge=0, le=5)
+    Content_Difficulty: Decimal = Field(ge=0, le=5)
 
 class UserProfile(BaseModel):
     """Model for user profile data"""
@@ -77,22 +78,34 @@ class EvaluationInput(BaseModel):
     financial_dependents: int
 
 class EvaluationNotes(BaseModel):
+    """Model for evaluation notes and feedback"""
     summary: str
     key_insights: str
     areas_for_improvement: str
     recommendations: str
 
+class JudgeMetrics(BaseModel):
+    """Model for judge-specific metrics"""
+    latency: float
+    eval_tokens: int
+    eval_cost: str
+    currency: str = "USD"
+
+class JudgeEvaluation(BaseModel):
+    """Model for individual judge's evaluation"""
+    judge_id: str
+    scores: ScoreMetrics
+    evaluation_notes: EvaluationNotes
+    judge_metrics: Optional[JudgeMetrics] = None
+    process_status: str = Field(default="success", description="Status of evaluation processing: success, error, or partial")
+    raw_response: Optional[str] = Field(default=None, description="Raw response from judge when processing fails")
+
 class DifyEvaluationOutput(BaseModel):
-    """Model for Dify evaluation output"""
+    """Model for complete evaluation output"""
     conversation_id: str
     username: str
     agent_id: str
     evaluation_timestamp: datetime = Field(default_factory=lambda: datetime.utcnow())
-    Personalization: int = Field(ge=0, le=5)
-    Language_Simplicity: int = Field(ge=0, le=5)
-    Response_Length: int = Field(ge=0, le=5)
-    Content_Relevance: int = Field(ge=0, le=5)
-    Content_Difficulty: int = Field(ge=0, le=5)
-    evaluation_notes: EvaluationNotes
+    judge_evaluations: List[JudgeEvaluation]
     usage_metrics: Optional[UsageMetrics] = None
     quiz_metrics: Optional[QuizMetrics] = None 
