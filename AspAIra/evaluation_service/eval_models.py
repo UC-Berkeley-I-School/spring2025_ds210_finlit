@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Literal
+from typing import List, Dict, Optional, Literal, Union
 from datetime import datetime
 from decimal import Decimal
 from pydantic import validator
@@ -86,9 +86,9 @@ class EvaluationNotes(BaseModel):
 
 class JudgeMetrics(BaseModel):
     """Model for judge-specific metrics"""
-    latency: float
-    eval_tokens: int
-    eval_cost: str
+    latency: Decimal
+    eval_tokens: Decimal
+    eval_cost: Decimal
     currency: str = "USD"
 
 class JudgeEvaluation(BaseModel):
@@ -96,9 +96,21 @@ class JudgeEvaluation(BaseModel):
     judge_id: str
     scores: ScoreMetrics
     evaluation_notes: EvaluationNotes
-    judge_metrics: Optional[JudgeMetrics] = None
+    judge_metrics: Optional[Dict[str, Decimal]] = None  # Only Decimal values for metrics
     process_status: str = Field(default="success", description="Status of evaluation processing: success, error, or partial")
     raw_response: Optional[str] = Field(default=None, description="Raw response from judge when processing fails")
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'JudgeEvaluation':
+        """Create a JudgeEvaluation from a dictionary"""
+        return cls(
+            judge_id=data['judge_id'],
+            scores={k: Decimal(str(v)) for k, v in data['scores'].items()},
+            evaluation_notes=data['evaluation_notes'],
+            process_status=data['process_status'],
+            raw_response=data.get('raw_response'),
+            judge_metrics=data.get('judge_metrics')
+        )
 
 class DifyEvaluationOutput(BaseModel):
     """Model for complete evaluation output"""

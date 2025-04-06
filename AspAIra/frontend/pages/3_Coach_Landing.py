@@ -181,36 +181,36 @@ def get_initial_message():
         print(f"Frontend: Starting initial message request for user {st.session_state.username}")
         
         with loading_state():
-        with requests.post(
-            "http://localhost:8001/api/chat",
-            headers={"Authorization": f"Bearer {st.session_state.access_token}"},
-            json={
-                "message": "Please start a new conversation and provide the opening statement so we can get started",
-                "username": st.session_state.username
-            },
-            stream=True
-        ) as response:
-            if response.status_code == 200:
-                for line in response.iter_lines():
-                    if line:
-                        line = line.decode('utf-8')
-                        if line.startswith('data: '):
+            with requests.post(
+                "http://localhost:8001/api/chat",
+                headers={"Authorization": f"Bearer {st.session_state.access_token}"},
+                json={
+                    "message": "Please start a new conversation and provide the opening statement so we can get started",
+                    "username": st.session_state.username
+                },
+                stream=True
+            ) as response:
+                if response.status_code == 200:
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
                                 data = line[6:]
-                            if data == '[DONE]':
-                                break
-                            try:
-                                response_data = json.loads(data)
+                                if data == '[DONE]':
+                                    break
+                                try:
+                                    response_data = json.loads(data)
                                     if 'error' in response_data:
                                         error_msg = response_data['error']
                                         if handle_api_error(error_msg):
                                             return
                                     process_response(response_data)
-                            except json.JSONDecodeError:
-                                continue
-            else:
-                error_data = response.json()
-                st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
-            
+                                except json.JSONDecodeError:
+                                    continue
+                else:
+                    error_data = response.json()
+                    st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
+                
     except Exception as e:
         print(f"Frontend: Error getting initial message - {str(e)}")
         st.error(f"Error getting initial message: {str(e)}")
@@ -236,36 +236,36 @@ def process_message(message):
     print(f"Frontend: Sending message - {message}")
     
     try:
-            with requests.post(
-                "http://localhost:8001/api/chat",
-                headers={"Authorization": f"Bearer {st.session_state.access_token}"},
-                json={
-                    "message": message,
-                    "username": st.session_state.username,
-                    "conversation_id": st.session_state.conversation_id
-                },
-                stream=True
-            ) as response:
-                if response.status_code == 200:
-                    for line in response.iter_lines():
-                        if line:
-                            line = line.decode('utf-8')
-                            if line.startswith('data: '):
+        with requests.post(
+            "http://localhost:8001/api/chat",
+            headers={"Authorization": f"Bearer {st.session_state.access_token}"},
+            json={
+                "message": message,
+                "username": st.session_state.username,
+                "conversation_id": st.session_state.conversation_id
+            },
+            stream=True
+        ) as response:
+            if response.status_code == 200:
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith('data: '):
                             data = line[6:]
-                                if data == '[DONE]':
-                                    break
-                                try:
-                                    response_data = json.loads(data)
+                            if data == '[DONE]':
+                                break
+                            try:
+                                response_data = json.loads(data)
                                 if 'error' in response_data:
                                     error_msg = response_data['error']
                                     if handle_api_error(error_msg):
                                         return
                                 process_response(response_data)
-                                except json.JSONDecodeError:
-                                    continue
-                else:
-                    error_data = response.json()
-                    st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
+                            except json.JSONDecodeError:
+                                continue
+            else:
+                error_data = response.json()
+                st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
                 
     except requests.exceptions.RequestException as e:
         st.error("Network error. Please check your connection and try again.")

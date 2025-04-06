@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from .eval_models import DifyEvaluationOutput, EvaluationNotes
 from decimal import Decimal
 import logging
+import time
 
 load_dotenv()
 
@@ -213,6 +214,12 @@ class DifyEvaluationService:
                 "process_status": "success",
                 "raw_response": raw_thought
             }
+
+            # Preserve any existing judge_metrics
+            if "judge_metrics" in evaluation_data:
+                result["judge_metrics"] = evaluation_data["judge_metrics"]
+                logger.info(f"Preserved judge_metrics in result: {result['judge_metrics']}")
+
             return result
 
         except Exception as e:
@@ -222,6 +229,10 @@ class DifyEvaluationService:
     async def send_to_dify(self, data: Dict) -> Optional[Dict]:
         """Send data to Dify API using streaming mode"""
         try:
+            # Record start time for latency calculation
+            start_time = time.time()
+            judge_metrics = None
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.config['base_url']}/v1/chat-messages",
@@ -245,6 +256,28 @@ class DifyEvaluationService:
                                             last_thought_event = data
                                             raw_thought = data.get('thought')
                                             logger.info(f"Received agent thought: {raw_thought}")
+                                        
+                                        elif event_type == 'message_end':
+                                            # Calculate judge metrics from message_end event
+                                            end_time = time.time()
+                                            latency = Decimal(str((end_time - start_time) * 1000))
+                                            
+                                            # Get usage metrics from message_end event
+                                            usage_metrics = data.get('metadata', {}).get('usage', {})
+                                            prompt_tokens = Decimal(str(usage_metrics.get('prompt_tokens', 0)))
+                                            completion_tokens = Decimal(str(usage_metrics.get('completion_tokens', 0)))
+                                            eval_tokens = prompt_tokens + completion_tokens
+                                            eval_cost = Decimal(str(usage_metrics.get('total_price', 0)))
+                                            
+                                            # Store judge metrics
+                                            judge_metrics = {
+                                                "latency": latency,
+                                                "eval_tokens": eval_tokens,
+                                                "eval_cost": eval_cost,
+                                                "currency": "USD"
+                                            }
+                                            
+                                            logger.info(f"Collected judge metrics: {judge_metrics}")
                                         
                                         elif event_type == 'error':
                                             logger.error(f"Error from Dify: {data.get('message', 'Unknown error')}")
@@ -277,6 +310,9 @@ class DifyEvaluationService:
                             
                             evaluation_data = self._extract_json_from_response(thought, raw_thought)
                             if evaluation_data:
+                                # Add judge metrics to evaluation data
+                                if judge_metrics:
+                                    evaluation_data['judge_metrics'] = judge_metrics
                                 return evaluation_data
                             else:
                                 return {

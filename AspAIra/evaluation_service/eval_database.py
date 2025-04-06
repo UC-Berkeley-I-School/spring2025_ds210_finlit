@@ -89,31 +89,66 @@ class EvaluationDatabase:
             print(f"Error getting user profile: {str(e)}")
             return {}
     
+    def _convert_to_dynamodb_format(self, data: Dict) -> Dict:
+        """Recursively convert numeric values to Decimal for DynamoDB"""
+        try:
+            converted = {}
+            for key, value in data.items():
+                try:
+                    if isinstance(value, (int, float)):
+                        converted[key] = Decimal(str(value))
+                    elif isinstance(value, dict):
+                        converted[key] = self._convert_to_dynamodb_format(value)
+                    elif isinstance(value, list):
+                        converted[key] = [
+                            self._convert_to_dynamodb_format(item) if isinstance(item, dict) else item
+                            for item in value
+                        ]
+                    else:
+                        converted[key] = value
+                except Exception as e:
+                    print(f"Error converting key {key}: {str(e)}")
+                    converted[key] = value  # Keep original value if conversion fails
+            return converted
+        except Exception as e:
+            print(f"Error in _convert_to_dynamodb_format: {str(e)}")
+            return data  # Return original data if conversion fails
+
     def store_evaluation(self, evaluation_data: Dict) -> bool:
         """Store evaluation results in AspAIra_ConversationEvaluations"""
         try:
+            print(f"Starting to store evaluation data: {evaluation_data}")
+            
             # Validate data against DifyEvaluationOutput model
             validated_data = DifyEvaluationOutput(**evaluation_data)
+            print("Data validated successfully")
             
             # Convert to dict and ensure timestamp is in ISO format
             data_to_store = validated_data.dict()
             data_to_store['evaluation_timestamp'] = data_to_store['evaluation_timestamp'].isoformat()
+            print("Timestamp converted to ISO format")
             
-            # Convert numeric values to Decimal for DynamoDB
-            converted_data = {}
-            for key, value in data_to_store.items():
-                if isinstance(value, (int, float)):
-                    converted_data[key] = Decimal(str(value))
-                else:
-                    converted_data[key] = value
+            # Log judge metrics before conversion
+            for judge_eval in data_to_store.get('judge_evaluations', []):
+                print(f"Judge metrics before conversion for {judge_eval['judge_id']}: {judge_eval.get('judge_metrics')}")
+            
+            # Convert all numeric values to Decimal recursively
+            converted_data = self._convert_to_dynamodb_format(data_to_store)
+            
+            # Log judge metrics after conversion
+            for judge_eval in converted_data.get('judge_evaluations', []):
+                print(f"Judge metrics after conversion for {judge_eval['judge_id']}: {judge_eval.get('judge_metrics')}")
             
             # Store in DynamoDB
+            print(f"Attempting to store converted data: {converted_data}")
             self.evaluations_table.put_item(Item=converted_data)
             print(f"Successfully stored evaluation for conversation {converted_data['conversation_id']}")
             return True
             
         except Exception as e:
             print(f"Error storing evaluation: {str(e)}")
+            import traceback
+            print(f"Full traceback: {traceback.format_exc()}")
             return False
     
     def get_evaluation(self, conversation_id: str) -> Dict:
