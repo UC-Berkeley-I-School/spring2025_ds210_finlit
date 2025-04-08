@@ -79,7 +79,7 @@ class DifyService:
 
             # Make request to Dify
             response = requests.post(
-                f"{self.config['base_url']}/v1/chat-messages",
+                f"{self.config['base_url']}/chat-messages",
                 headers=self.headers,
                 json=request_data,
                 stream=True

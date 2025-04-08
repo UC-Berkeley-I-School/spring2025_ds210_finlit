@@ -18,23 +18,46 @@ class User(UserBase):
     last_login: Optional[datetime] = None
 
 class ProfilePart1(BaseModel):
-    country_of_origin: Literal["Philippines", "India", "Bangladesh", "Nepal", "Ethiopia", "Kenya", "Uganda", "Sri Lanka", "Other"]
-    time_in_uae: Literal["Less than a year", "1-3 years", "3-5 years", "5-10 years", "10+ years"]
-    job_title: Literal["Live In maid", "Live Out maid", "Cook", "Nanny"]
-    housing: Literal["Live In", "Live Out", "Temporary Housing"]
-    education_level: Literal["None", "Primary School", "High School", "College"]
-    number_of_kids: Literal["None", "1", "2", "3", "More than 3"]
+    country_of_origin: Literal[
+        "Philippines", "India", "Bangladesh", "Nepal", "Ethiopia", "Kenya", "Uganda", "Sri Lanka", "Other"
+    ]
+    time_in_uae: Literal[
+        "Less than a year", "1-3 years", "3-5 years", "5-10 years", "10+ years"
+    ]
+    job_title: Literal[
+        "Live In maid", "Live Out maid", "Cook", "Nanny"
+    ]
+    housing: Literal[
+        "Live In", "Live Out", "Temporary Housing"
+    ]
+    education_level: Literal[
+        "None", "Primary School", "High School", "College"
+    ]
+    number_of_kids: Literal[
+        "None", "1", "2", "3", "More than 3"
+    ]
 
     class Config:
         populate_by_name = True
 
 class ProfilePart2(BaseModel):
-    bank_account: Literal["FAB", "Emirates NBD", "ADCB", "Mashreq Bank", "RAKBANK", "Dubai Islamic Bank", "Sharjah Islamic Bank", "Emirates Islamic Bank", "CBD", "No Bank Account"]
-    debt_information: Literal["Debt in Home Country", "Debt in UAE", "No Debt"]
-    remittance_information: Literal["Send money with Bank Transfer", "Send money with Exchange House", 
-                                  "Send money offline", "Don't Send any money"]
-    remittance_amount: Literal["Less than 100 AED", "100-500 AED", "500-1000 AED", "1000-2000 AED", "More than 2000 AED"]
-    financial_dependents: Literal["No One", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"]
+    bank_account: Literal[
+        "FAB", "Emirates NBD", "ADCB", "Mashreq Bank", "RAKBANK",
+        "Dubai Islamic Bank", "Sharjah Islamic Bank", "Emirates Islamic Bank", "CBD", "No Bank Account"
+    ]
+    debt_information: Literal[
+        "Debt in Home Country", "Debt in UAE", "No Debt"
+    ]
+    remittance_information: Literal[
+        "Send money with Bank Transfer", "Send money with Exchange House",
+        "Send money offline", "Don't Send any money"
+    ]
+    remittance_amount: Literal[
+        "Less than 100 AED", "100-500 AED", "500-1000 AED", "1000-2000 AED", "More than 2000 AED"
+    ]
+    financial_dependents: Literal[
+        "No One", "Just Kids", "Just Parents", "Kids and Parents", "Entire Extended Family"
+    ]
 
     class Config:
         populate_by_name = True

@@ -1,5 +1,9 @@
+import os
 import streamlit as st
 import requests
+
+# Retrieve the backend URL from environment variables (default to localhost)
+backend_url = os.getenv("BACKEND_URL", "http://localhost:8001")
 
 # Initialize session states
 if 'access_token' not in st.session_state:
@@ -139,7 +143,7 @@ def update_profile(data):
     try:
         headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
         response = requests.post(
-            "http://localhost:8001/user/profile1",
+            f"{backend_url}/user/profile1",
             headers=headers,
             json=data
         )
@@ -166,7 +170,7 @@ st.markdown('<div class="form-container">', unsafe_allow_html=True)
 
 # Form fields
 with st.form("profile1_form"):
-    country_of_origin = st.selectbox("Country of Origin", ["", "Philippines", "India", "Bangladesh", "Nepal", "Ethiopia", "Kenya", "Uganda","Sri Lanka","Other"])
+    country_of_origin = st.selectbox("Country of Origin", ["", "Philippines", "India", "Bangladesh", "Nepal", "Ethiopia", "Kenya", "Uganda", "Sri Lanka", "Other"])
     time_in_uae = st.selectbox("How Long Have You Been in UAE", ["", "Less than a year", "1-3 years", "3-5 years", "5-10 years", "10+ years"])
     job_title = st.selectbox("Job Title", ["", "Live In maid", "Live Out maid", "Cook", "Nanny"])
     housing = st.selectbox("Housing", ["", "Live In", "Live Out", "Temporary Housing"])
@@ -202,4 +206,4 @@ with st.form("profile1_form"):
             else:
                 st.error("Failed to update profile. Please try again.")
 
-st.markdown('</div>', unsafe_allow_html=True) 
+st.markdown('</div>', unsafe_allow_html=True)

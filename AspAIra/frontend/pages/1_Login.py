@@ -1,5 +1,9 @@
+import os
 import streamlit as st
 import requests
+
+# Get the backend URL from environment variables (default to localhost if not set)
+backend_url = os.getenv("BACKEND_URL", "http://localhost:8001")
 
 # Initialize session states if not exists
 if 'access_token' not in st.session_state:
@@ -180,48 +184,49 @@ st.markdown("""
 
 def login(username: str, password: str):
     try:
-        print(f"Attempting login for username: {username}")  # Debug log
+        print(f"DEBUG: Attempting login for username: {username}")
         response = requests.post(
-            "http://localhost:8001/token",
-            data={"username": username, "password": password}
+            f"{backend_url}/token",
+            data={"username": username, "password": password},
+            timeout=10
         )
-        print(f"Login response status: {response.status_code}")  # Debug log
-        print(f"Login response body: {response.text}")  # Debug log
+        print(f"DEBUG: Login response status: {response.status_code}")
+        print(f"DEBUG: Login response body: {response.text}")
         if response.status_code == 200:
             return response.json()
         else:
-            print(f"Login failed with status {response.status_code}: {response.text}")  # Debug log
+            print(f"DEBUG: Login failed with status {response.status_code}: {response.text}")
             return None
     except requests.RequestException as e:
-        print(f"Login request error: {str(e)}")  # Debug log
+        print(f"DEBUG: Login request error: {str(e)}")
         return None
 
 def create_account(username: str, password: str):
     try:
-        print(f"Attempting to create account for username: {username}")  # Debug log
+        print(f"DEBUG: Attempting to create account for username: {username}")
         response = requests.post(
-            "http://localhost:8001/signup",
-            json={"username": username, "password": password}
+            f"{backend_url}/signup",
+            json={"username": username, "password": password},
+            timeout=10
         )
-        print(f"Create account response status: {response.status_code}")  # Debug log
-        print(f"Create account response body: {response.text}")  # Debug log
-        
+        print(f"DEBUG: Create account response status: {response.status_code}")
+        print(f"DEBUG: Create account response body: {response.text}")
         if response.status_code == 200:
             return True
         else:
             error_message = response.json().get("message", "Unknown error")
-            print(f"Account creation failed: {error_message}")  # Debug log
+            print(f"DEBUG: Account creation failed: {error_message}")
             st.error(error_message)
             return False
     except requests.RequestException as e:
-        print(f"Create account request error: {str(e)}")  # Debug log
+        print(f"DEBUG: Create account request error: {str(e)}")
         st.error("Failed to connect to server. Please try again.")
         return False
 
 def check_profile_status(token: str):
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get("http://localhost:8001/user/profile-status", headers=headers)
+        response = requests.get(f"{backend_url}/user/profile-status", headers=headers, timeout=10)
         if response.status_code == 200:
             return response.json()
         return {"profile1_complete": False, "profile2_complete": False}
@@ -289,4 +294,4 @@ with col2:
                 st.error("Failed to create account. Please try again.")
 
 st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True) 
+st.markdown('</div>', unsafe_allow_html=True)

@@ -15,82 +15,17 @@ import json
 from decimal import Decimal
 from fastapi import Request
 
-# JWT Configuration
-SECRET_KEY = "development_secret_key"  # Change in production
+# ============ JWT CONFIGURATION ============
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# DynamoDB configuration
-try:
-    dynamodb = boto3.resource(
-        'dynamodb',
-        endpoint_url='http://localhost:8000',
-        region_name='local',
-        aws_access_key_id='dummy',
-        aws_secret_access_key='dummy',
-        config=Config(
-            connect_timeout=5,
-            retries={'max_attempts': 1}
-        )
-    )
-    # Test the connection
-    dynamodb.meta.client.list_tables()
-    print("Successfully connected to DynamoDB local")
-except Exception as e:
-    print(f"Warning: Could not connect to DynamoDB local: {str(e)}")
-    print("Using in-memory storage for development")
-    # Create a simple in-memory storage for development
-    class InMemoryDB:
-        def __init__(self):
-            self.tables = {}
-            self._create_tables()
-        
-        def _create_tables(self):
-            self.tables['AspAIra_Users'] = {}
-            self.tables['AspAIra_Conversations'] = {}
-            self.tables['AspAIra_Chats'] = {}
-        
-        def Table(self, name):
-            return InMemoryTable(self.tables[name])
-            
-        def create_table(self, TableName, KeySchema, AttributeDefinitions, ProvisionedThroughput, GlobalSecondaryIndexes=None):
-            # For in-memory storage, we just need to ensure the table exists
-            if TableName not in self.tables:
-                self.tables[TableName] = {}
-            return InMemoryTable(self.tables[TableName])
-    
-    class InMemoryTable:
-        def __init__(self, data):
-            self.data = data
-        
-        def put_item(self, Item):
-            if 'username' in Item:
-                self.data[Item['username']] = Item
-        
-        def get_item(self, Key):
-            return {'Item': self.data.get(Key.get('username'))}
-        
-        def query(self, **kwargs):
-            return {'Items': list(self.data.values())}
-        
-        def scan(self):
-            return {'Items': list(self.data.values())}
-        
-        def update_item(self, **kwargs):
-            return {'Attributes': kwargs.get('ExpressionAttributeValues', {})}
-            
-        def wait_until_exists(self):
-            # For in-memory storage, table exists immediately
-            pass
-            
-        @property
-        def table_status(self):
-            return 'ACTIVE'
-    
-    dynamodb = InMemoryDB()
+# DynamoDB configuration for AWS production
+# Remove local testing parameters; credentials and region will be provided by AWS environment/IAM roles.
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "us-east-1"))
 
 # Table names
 USERS_TABLE = 'AspAIra_Users'
@@ -474,10 +409,6 @@ def save_chat_message(
         if usage_metrics:
             converted_metrics = {}
             for key, value in usage_metrics.items():
-                # Handle latency as string with 8 decimal places
-                #if key == 'latency' and isinstance(value, (int, float)):
-                #    converted_metrics[key] = f"{value:.8f}"
-                # Handle other numeric values as Decimal
                 if isinstance(value, (int, float)):
                     converted_metrics[key] = Decimal(str(value))
                 elif isinstance(value, dict):
@@ -489,11 +420,10 @@ def save_chat_message(
                     converted_metrics[key] = value
             usage_metrics = converted_metrics
         
-        # # Manual latency override (commented out to test Dify's native latency handling)
+        # Manual latency override (commented out to test Dify's native latency handling)
         if dify_metadata and 'manual_latency' in dify_metadata:
             if not usage_metrics:
                 usage_metrics = {}
-             # Format the latency with 8 decimal places to preserve precision
             usage_metrics['latency'] = f"{dify_metadata['manual_latency']:.8f}"
             print(f"Updated usage_metrics with manual latency: {dify_metadata['manual_latency']}ms")
         
@@ -550,7 +480,7 @@ def save_chat_message(
 def get_chat_history(username: str, conversation_id: Optional[str] = None) -> List[dict]:
     """Get chat history for a user, optionally filtered by conversation_id"""
     try:
-        table = dynamodb.Table('chat_messages')
+        table = dynamodb.Table(CHATS_TABLE)
         
         if conversation_id:
             # Get messages for specific conversation
@@ -580,7 +510,7 @@ def get_chat_history(username: str, conversation_id: Optional[str] = None) -> Li
 def get_conversations(username: str) -> List[dict]:
     """Get all unique conversations for a user"""
     try:
-        table = dynamodb.Table('chat_messages')
+        table = dynamodb.Table(CHATS_TABLE)
         
         # Get all messages for user
         response = table.query(
@@ -647,5 +577,3 @@ def verify_token(request: Request) -> Optional[str]:
     except Exception as e:
         print(f"Error verifying token: {str(e)}")
         return None
-
-# End of file - removing reset_database function 

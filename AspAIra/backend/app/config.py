@@ -1,19 +1,21 @@
 """
 Configuration settings for the AspAIra application.
+
+This module defines configurations for:
+- Agent settings including API keys, base URLs, and required inputs.
+- AWS DynamoDB and general AWS region settings.
+- FastAPI application metadata.
+- Default versions used across the application.
 """
+
+import os
 from typing import Dict
 
-# Dify Credentials Setup:
-# 1. API Key (needs to be set):
-#    - Create in Dify dashboard under "API Keys"
-#    - Starts with "app-"
-#    - Example: app-1sc0QKSxc2rXRTQNRvLM4Ktk
-
-# Agent configurations
-AGENT_CONFIGS = {
+# ===================== Agent Configurations =====================
+AGENT_CONFIGS: Dict[str, Dict] = {
     "Baseline_gpt": {
-        "api_key": "app-vYXuXAEZCGcjMq7hGc1uzaEh",  # Local Dify API key
-        "base_url": "http://localhost",  # Updated to use HTTP for local development
+        "api_key": os.getenv("BASELINE_GPT_API_KEY", "app-local-default"),
+        "base_url": os.getenv("DIFY_API_URL", "http://localhost"),
         "model": "gpt-4o",
         "required_inputs": {
             "number_of_kids": {"source": "profile1", "type": "string"},
@@ -28,9 +30,9 @@ AGENT_CONFIGS = {
         }
     },
     "Baseline_claude": {
-        "api_key": "app-5UVXvE1G6wiZBZ3v0MACCfbj",  # Local Dify API key
-        "base_url": "http://localhost",  # Updated to use HTTP for local development
-        "model": "claude-3-5-sonnet-20241022",
+        "api_key": os.getenv("BASELINE_CLAUDE_API_KEY", "app-local-default"),
+        "base_url": os.getenv("DIFY_API_URL", "http://localhost"),
+        "model": "clause-3-5-sonnet-20241022",
         "required_inputs": {
             "number_of_kids": {"source": "profile1", "type": "string"},
             "bank_account": {"source": "profile2", "type": "string"},
@@ -44,9 +46,9 @@ AGENT_CONFIGS = {
         }
     },
     "V2_claude": {
-        "api_key": "app-N1mfbmN31JwFFOfEhOnvGjg3",  # Local Dify API key
-        "base_url": "http://localhost",  # Updated to use HTTP for local development
-        "model": "claude-3-5-sonnet-20241022",
+        "api_key": os.getenv("V2_CLAUDE_API_KEY", "app-local-default"),
+        "base_url": os.getenv("DIFY_API_URL", "http://localhost"),
+        "model": "clause-3-5-sonnet-20241022",
         "required_inputs": {
             "number_of_kids": {"source": "profile1", "type": "string"},
             "bank_account": {"source": "profile2", "type": "string"},
@@ -63,22 +65,23 @@ AGENT_CONFIGS = {
     }
 }
 
-# Active agent version
-ACTIVE_AGENT_VERSION = "V2_claude"
+# ===================== Active Agent Version =====================
+# Specifies the currently active agent configuration.
+ACTIVE_AGENT_VERSION = os.getenv("ACTIVE_AGENT_VERSION", "V2_claude")
 
-# Database configuration
+# ===================== Database Configuration =====================
 DATABASE_CONFIG = {
-    "table_name": "chat_interactions",
-    "region": "us-east-1"
+    "table_name": os.getenv("DYNAMODB_TABLE_NAME", "chat_interactions"),
+    "region": os.getenv("AWS_REGION", "us-east-1")
 }
 
-# API configuration
+# ===================== API Configuration =====================
 API_CONFIG = {
     "title": "AspAIra API",
     "description": "API for AspAIra financial coaching application",
     "version": "1.0.0",
-    "debug": True
+    "debug": os.getenv("DEBUG", "true").lower() == "true"
 }
 
-# Default version to use
-DEFAULT_DIFY_VERSION = 'v1' 
+# ===================== Default Dify Version =====================
+DEFAULT_DIFY_VERSION = os.getenv("DEFAULT_DIFY_VERSION", "v1")

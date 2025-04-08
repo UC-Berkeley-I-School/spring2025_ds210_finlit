@@ -1,9 +1,13 @@
+import os
 import streamlit as st
 import requests
 from datetime import datetime
 import json
 import time
 from contextlib import contextmanager
+
+# Retrieve the backend URL from environment variables (default to localhost)
+backend_url = os.getenv("BACKEND_URL", "http://localhost:8001")
 
 # Initialize session states
 if 'access_token' not in st.session_state:
@@ -182,7 +186,7 @@ def get_initial_message():
         
         with loading_state():
             with requests.post(
-                "http://localhost:8001/api/chat",
+                f"{backend_url}/api/chat",
                 headers={"Authorization": f"Bearer {st.session_state.access_token}"},
                 json={
                     "message": "Please start a new conversation and provide the opening statement so we can get started",
@@ -210,7 +214,7 @@ def get_initial_message():
                 else:
                     error_data = response.json()
                     st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
-                
+            
     except Exception as e:
         print(f"Frontend: Error getting initial message - {str(e)}")
         st.error(f"Error getting initial message: {str(e)}")
@@ -237,7 +241,7 @@ def process_message(message):
     
     try:
         with requests.post(
-            "http://localhost:8001/api/chat",
+            f"{backend_url}/api/chat",
             headers={"Authorization": f"Bearer {st.session_state.access_token}"},
             json={
                 "message": message,
@@ -266,7 +270,7 @@ def process_message(message):
             else:
                 error_data = response.json()
                 st.error(f"Error: {error_data.get('detail', 'Unknown error occurred')}")
-                
+            
     except requests.exceptions.RequestException as e:
         st.error("Network error. Please check your connection and try again.")
     except Exception as e:
@@ -289,7 +293,7 @@ def render_chat_interface():
     chat_container = st.container()
     
     with chat_container:
-        # Display chat history
+        # Display chat history with support for multiple message formats
         if st.session_state.chat_history:
             for message in st.session_state.chat_history:
                 with st.chat_message(message["role"]):

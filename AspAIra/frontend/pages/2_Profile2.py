@@ -1,5 +1,9 @@
+import os
 import streamlit as st
 import requests
+
+# Retrieve the backend URL from environment variables (default to localhost)
+backend_url = os.getenv("BACKEND_URL", "http://localhost:8001")
 
 # Initialize session states if not exists
 if 'access_token' not in st.session_state:
@@ -144,7 +148,7 @@ def update_profile_part2(profile_data: dict):
     try:
         headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
         response = requests.post(
-            "http://localhost:8001/user/profile2",
+            f"{backend_url}/user/profile2",
             json=profile_data,
             headers=headers
         )
@@ -204,7 +208,7 @@ with st.form("profile2_form"):
         key="financial_dependents"
     )
     
-    # Submit button with proper title and no ARIA attributes
+    # Submit button
     submit_button = st.form_submit_button(
         "Continue",
         type="primary",

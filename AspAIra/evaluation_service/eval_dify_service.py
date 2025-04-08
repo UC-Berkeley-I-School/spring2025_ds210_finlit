@@ -235,7 +235,7 @@ class DifyEvaluationService:
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self.config['base_url']}/v1/chat-messages",
+                    f"{self.config['base_url']}/chat-messages",
                     headers=self.headers,
                     json=data
                 ) as response:
