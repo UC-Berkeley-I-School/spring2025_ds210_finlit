@@ -1,1 +1,33 @@
+# Core FastAPI Framework
+fastapi==0.109.1  # Auto-installs correct Starlette version
+
+# ASGI Server (Runs FastAPI)
+uvicorn[standard]==0.27.0  # Includes all extras (e.g., websockets, compression)
+
+# AWS SDK for Python (DynamoDB, Secrets Manager)
+boto3==1.34.28
+botocore==1.34.28  # Required by boto3 (avoid upgrading separately)
+
+# Security & Authentication
+python-jose[cryptography]==3.4.0  # JWT Handling
+passlib[bcrypt]==1.7.4  # Secure password hashing
+bcrypt==3.2.2  # Explicit version to prevent dependency conflicts
+python-dotenv==1.0.1  # Load environment variables from .env
+
+# HTTP Clients & Debugging Tools
+httpx==0.26.0  # Async HTTP Client (useful for testing API endpoints)
+
+# Package Management
+setuptools>=70.0.0  # Use `>=` to ensure compatibility with future versions
+pip>=23.3  # Allow minor updates without conflicts
+
+# Form Handling in FastAPI
+python-multipart==0.0.9  # Needed for handling file uploads & form data
 sseclient-py==1.7.2 
+
+# Optional: Logging/Monitoring/CloudWatch
+aws-logging-handlers
+
+requests==2.31.0
+
+aiohttp==3.8.5

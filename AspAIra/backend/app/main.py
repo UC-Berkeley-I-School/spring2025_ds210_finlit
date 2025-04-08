@@ -10,7 +10,7 @@ from .config import API_CONFIG, ACTIVE_AGENT_VERSION, AGENT_CONFIGS
 import json
 import asyncio
 import requests
-from sseclient import SSEClient
+#from sseclient import SSEClient
 from datetime import datetime
 from .database import UserExistsError
 import logging

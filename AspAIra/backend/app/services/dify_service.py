@@ -9,7 +9,7 @@ Core functionality:
 import os
 import json
 import requests
-from sseclient import SSEClient
+#from sseclient import SSEClient
 from typing import Dict, AsyncGenerator, Optional, Any, List
 from datetime import datetime
 import time

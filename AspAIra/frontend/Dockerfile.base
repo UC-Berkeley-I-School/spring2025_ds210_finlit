@@ -1,0 +1,21 @@
+# Dockerfile.base (Frontend)
+FROM --platform=linux/amd64 python:3.13-slim
+
+# Set working directory for building the base image
+WORKDIR /base
+
+# Environment variables to ensure unbuffered output and proper Python path
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH="/base"
+
+# Install system-level build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements and constraints files into the base image
+COPY requirements.txt constraints.txt .
+
+# Upgrade pip and install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir --constraint constraints.txt -r requirements.txt

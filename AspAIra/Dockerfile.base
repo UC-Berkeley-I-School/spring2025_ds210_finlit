@@ -1,0 +1,19 @@
+# Dockerfile.base
+# Build the base image for AspAIra with Python 3.13-slim for AMD64 architecture.
+FROM --platform=linux/amd64 python:3.11-slim
+
+# Set working directory and environment variables
+WORKDIR /base
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH="/base"
+
+# Install system-level build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements file and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt

@@ -1,5 +1,6 @@
 from typing import List, Dict, Optional
 import os
+import uuid
 from dotenv import load_dotenv
 from datetime import datetime
 from decimal import Decimal
@@ -127,6 +128,11 @@ class EvaluationDatabase:
             data_to_store = validated_data.dict()
             data_to_store['evaluation_timestamp'] = data_to_store['evaluation_timestamp'].isoformat()
             print("Timestamp converted to ISO format")
+
+            # Generate an evaluation_id if one is not provided
+            if 'evaluation_id' not in data_to_store:
+                data_to_store['evaluation_id'] = str(uuid.uuid4())
+                print(f"Generated evaluation_id: {data_to_store['evaluation_id']}")
             
             # Log judge metrics before conversion
             for judge_eval in data_to_store.get('judge_evaluations', []):

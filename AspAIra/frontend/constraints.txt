@@ -1,0 +1,2 @@
+textract==9999  # Force pip to fail if textract is pulled
+textract-py3==9999
