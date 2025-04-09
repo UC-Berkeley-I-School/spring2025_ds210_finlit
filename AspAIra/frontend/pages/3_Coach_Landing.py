@@ -109,10 +109,12 @@ def clear_session_state():
 
 def reset_for_new_topic():
     """Reset only chat-related states while preserving auth"""
+    # Clear all chat-related states
     chat_states = ['chat_history', 'conversation_id', 'waiting_for_navigation', 'is_loading', 'user_input', 'api_overloaded', 'retry_after']
     for state in chat_states:
         if state in st.session_state:
             del st.session_state[state]
+    
     # Reinitialize required states
     st.session_state.chat_history = []
     st.session_state.conversation_id = None
@@ -121,6 +123,10 @@ def reset_for_new_topic():
     st.session_state.user_input = ""
     st.session_state.api_overloaded = False
     st.session_state.retry_after = 0
+    st.session_state.initialization_attempted = False
+    
+    # Force a complete page refresh
+    st.rerun()
 
 def handle_session_end():
     """Complete session end handling"""
@@ -134,12 +140,8 @@ def handle_navigation(message):
     # Check for variations of "start new topic"
     if message_lower in ["1", "start new topic", "start a new topic", "new topic", "start topic"]:
         print("Frontend: User selected to start a new topic")
-        # Reset all chat-related states
+        # Reset all chat-related states and force refresh
         reset_for_new_topic()
-        # Reset initialization flag to allow new initial message
-        st.session_state.initialization_attempted = False
-        # Force a complete page rerun
-        st.rerun()
     # Check for variations of "end session"
     elif message_lower in ["2", "end the session", "end session", "end", "stop"]:
         print("Frontend: User selected to end session")
